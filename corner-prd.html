@@ -1,0 +1,491 @@
+<title>Corner Events — PRD & Implementation Plan</title>
+<style>
+  :root{
+    --paper:#FBFAF7; --paper-2:#F3F1EA; --card:#FFFFFF; --line:#E4E1D6;
+    --ink:#15181C; --ink-2:#4A4E55; --ink-3:#7C8088;
+    --blue:#2E6BFF; --blue-soft:#EAF0FF; --blue-line:#C9D8FF;
+    --green:#1F8A5B; --green-soft:#E6F3EC;
+    --amber:#B8791B; --amber-bg:#FBEFD3; --amber-line:#EAD199;
+    --radius:14px; --radius-sm:9px;
+    --mono:ui-monospace,"SF Mono",Menlo,"Cascadia Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --maxw:74ch;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#101215; --paper-2:#171A1E; --card:#1A1E23; --line:#2B3037;
+      --ink:#EDEEF0; --ink-2:#B4B9C0; --ink-3:#828892;
+      --blue:#6E9BFF; --blue-soft:#1A2438; --blue-line:#33436B;
+      --green:#4FC08A; --green-soft:#15271F;
+      --amber:#E0AE5B; --amber-bg:#2A2313; --amber-line:#4A3D1D;
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#FBFAF7; --paper-2:#F3F1EA; --card:#FFFFFF; --line:#E4E1D6;
+    --ink:#15181C; --ink-2:#4A4E55; --ink-3:#7C8088;
+    --blue:#2E6BFF; --blue-soft:#EAF0FF; --blue-line:#C9D8FF;
+    --green:#1F8A5B; --green-soft:#E6F3EC;
+    --amber:#B8791B; --amber-bg:#FBEFD3; --amber-line:#EAD199;
+  }
+  :root[data-theme="dark"]{
+    --paper:#101215; --paper-2:#171A1E; --card:#1A1E23; --line:#2B3037;
+    --ink:#EDEEF0; --ink-2:#B4B9C0; --ink-3:#828892;
+    --blue:#6E9BFF; --blue-soft:#1A2438; --blue-line:#33436B;
+    --green:#4FC08A; --green-soft:#15271F;
+    --amber:#E0AE5B; --amber-bg:#2A2313; --amber-line:#4A3D1D;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased;margin:0;
+    font-size:16.5px;letter-spacing:.005em}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+  .bleed{max-width:1120px;margin-left:auto;margin-right:auto;padding:0 22px}
+
+  h1,h2,h3{font-family:var(--mono);font-weight:600;letter-spacing:-.01em;
+    text-wrap:balance;line-height:1.2}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--blue);font-weight:600}
+  p{color:var(--ink-2);margin:.7em 0}
+  strong{color:var(--ink);font-weight:600}
+  a{color:var(--blue)}
+  code{font-family:var(--mono);font-size:.86em;background:var(--paper-2);
+    border:1px solid var(--line);padding:.08em .38em;border-radius:5px;color:var(--ink)}
+
+  /* header */
+  header{border-bottom:1px solid var(--line);background:
+    linear-gradient(180deg,var(--paper-2),var(--paper))}
+  header .wrap{padding-top:52px;padding-bottom:40px}
+  .kicker{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:22px}
+  .pin{width:22px;height:22px;flex:none}
+  h1{font-size:clamp(30px,5vw,44px);margin:0 0 6px}
+  .sub{font-family:var(--mono);color:var(--ink-3);font-size:14px;margin:0}
+  .thesis{font-size:19px;line-height:1.5;color:var(--ink);margin-top:24px;
+    border-left:3px solid var(--blue);padding-left:18px}
+  .thesis strong{color:var(--ink)}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--ink-3);
+    margin-top:26px;display:flex;gap:18px;flex-wrap:wrap}
+
+  section{padding:44px 0;border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:0}
+  h2{font-size:24px;margin:0 0 4px;display:flex;gap:12px;align-items:baseline}
+  h2 .n{color:var(--ink-3);font-size:15px;font-weight:600}
+  .lede{color:var(--ink-2);margin:2px 0 22px;font-size:16px}
+  h3{font-size:16px;margin:26px 0 8px;color:var(--ink)}
+
+  /* callout — founder question */
+  .callout{background:var(--amber-bg);border:1px solid var(--amber-line);
+    border-radius:var(--radius);padding:18px 20px;margin:8px 0 22px}
+  .callout .tag{font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--amber);font-weight:700}
+  .callout p{margin:.4em 0 0;color:var(--ink)}
+  .callout .q{font-size:18px;font-style:italic;color:var(--ink)}
+
+  .answer{background:var(--blue-soft);border:1px solid var(--blue-line);
+    border-radius:var(--radius);padding:18px 20px;margin:0 0 8px}
+  .answer .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--blue);font-weight:700;margin-bottom:6px}
+  .sig{font-family:var(--mono);font-size:13.5px;background:var(--card);
+    border:1px dashed var(--blue-line);border-radius:var(--radius-sm);
+    padding:12px 14px;color:var(--ink);margin:12px 0;overflow-x:auto}
+  .sig b{color:var(--blue)}
+
+  /* tables */
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);
+    border-radius:var(--radius);margin:14px 0}
+  table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:520px}
+  th,td{text-align:left;padding:11px 15px;vertical-align:top;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:0}
+  thead th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-3);font-weight:600;background:var(--paper-2)}
+  td strong{color:var(--ink)}
+  .num{font-variant-numeric:tabular-nums}
+  .was{color:var(--ink-3)}
+  .rec{color:var(--ink)}
+  .rec b{color:var(--green)}
+
+  ul{color:var(--ink-2);padding-left:20px;margin:.6em 0}
+  li{margin:.35em 0}
+  li strong{color:var(--ink)}
+
+  /* diagram */
+  .diagram{background:var(--paper-2);border:1px solid var(--line);
+    border-radius:18px;padding:26px 20px;margin:8px 0}
+  .flow{display:flex;flex-direction:column;align-items:center;gap:0;
+    max-width:560px;margin:0 auto}
+  .node{width:100%;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--radius-sm);padding:12px 16px;text-align:center;position:relative}
+  .node .t{font-family:var(--mono);font-weight:600;font-size:14px;color:var(--ink)}
+  .node .d{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+  .node.src{background:var(--paper);border-style:dashed}
+  .node.store{background:var(--green-soft);border-color:transparent}
+  .node.map{background:var(--blue);border-color:var(--blue)}
+  .node.map .t,.node.map .d{color:#fff}
+  .node .stage{position:absolute;left:12px;top:10px;font-family:var(--mono);
+    font-size:11px;color:var(--blue);font-weight:700}
+  .node.newstage{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--blue-soft)}
+  .newpill{display:inline-block;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.1em;background:var(--blue);color:#fff;border-radius:20px;
+    padding:1px 7px;margin-left:7px;vertical-align:middle}
+  .arrow{width:2px;height:22px;background:var(--line);position:relative}
+  .arrow::after{content:"";position:absolute;bottom:-1px;left:-3px;
+    border-left:4px solid transparent;border-right:4px solid transparent;
+    border-top:6px solid var(--line)}
+  .arrow.lbl::before{content:attr(data-l);position:absolute;left:12px;top:2px;
+    font-family:var(--mono);font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+  .group{width:100%;border:1px dashed var(--line);border-radius:12px;
+    padding:26px 14px 16px;position:relative;display:flex;flex-direction:column;
+    align-items:center;gap:0;background:color-mix(in srgb,var(--card) 40%,transparent)}
+  .group>.glabel{position:absolute;top:-11px;left:14px;font-family:var(--mono);
+    font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;
+    background:var(--paper-2);color:var(--ink-2);padding:2px 9px;border:1px solid var(--line);
+    border-radius:20px}
+  .side{font-size:11.5px;color:var(--ink-3);font-family:var(--mono);
+    align-self:flex-start;margin:4px 0 0 2px}
+  .branch{display:flex;gap:12px;width:100%}
+  .branch .node{flex:1}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:20px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  /* tiers */
+  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+  @media(max-width:560px){.tiers{grid-template-columns:1fr}}
+  .tier{border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px;background:var(--card)}
+  .tier .name{font-family:var(--mono);font-weight:700;font-size:14px;display:flex;
+    align-items:center;gap:7px}
+  .tier .axis{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-3);margin:3px 0 8px}
+  .tier p{font-size:13px;margin:0;color:var(--ink-2)}
+  .tier .tdot{width:9px;height:9px;border-radius:50%;flex:none}
+
+  footer{padding:36px 0 60px;color:var(--ink-3);font-family:var(--mono);font-size:12px}
+  .src-note{font-size:12px;color:var(--ink-3);margin-top:10px}
+  @media (prefers-reduced-motion:no-preference){
+    .node{transition:transform .15s ease}
+  }
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="kicker">
+      <svg class="pin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 22s7-6.4 7-12A7 7 0 105 10c0 5.6 7 12 7 12z" fill="var(--blue)"/>
+        <circle cx="12" cy="10" r="2.6" fill="#fff"/>
+      </svg>
+      <span class="eyebrow">Corner · Technical Project · Phase 1</span>
+    </div>
+    <h1>Instagram → the best ephemeral events in a city</h1>
+    <p class="sub">PRD &amp; Implementation Plan</p>
+    <p class="thesis">The hard part isn't scraping Instagram — Apify does that. It's turning a
+      noisy, meme-filled feed into a <strong>clean, deduplicated, trustworthy set of events pinned to
+      real places</strong> — and keeping them fresh. Everything here optimizes for the three things
+      that matter: clean data out of messy IG, identity &amp; freshness, and a point of view on
+      what <strong>“best”</strong> means.</p>
+    <div class="meta">
+      <span>AUTHOR · YASH</span><span>FOR · ELIZA &amp; JAKE</span><span>SCOPE · NYC</span>
+    </div>
+  </div>
+</header>
+
+<section><div class="wrap">
+  <span class="eyebrow">The goal</span>
+  <h2><span class="n">01</span> What we're building</h2>
+  <p class="lede">Events are Corner's missing, most time-sensitive layer.</p>
+  <p>Corner surfaces places friends love. The <strong>good events</strong> — pop-ups, dinners, shows,
+    drops — live in Instagram captions, flyers, and reels, not on Eventbrite. The build is an
+    <strong>ingestion pipeline that continuously converts NYC Instagram content into structured,
+    deduped, map-ready events</strong>, ranked so the best rise to the top.</p>
+  <p><strong>Non-goals for Phase 1</strong> (design for them, don't build them): ticketing/RSVP,
+    user-submitted events, cities beyond NYC, real-time push.</p>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">Product point of view</span>
+  <h2><span class="n">02</span> What “best” means</h2>
+  <p class="lede">The brief says surface the <em>best</em> events — that's a ranking stance, not just ingestion.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Signal</th><th>Why it means “best”</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Source authority</strong></td><td>A trusted local curator beats a random repost</td></tr>
+      <tr><td><strong>Scarcity / ephemerality</strong></td><td>A one-night pop-up beats a standing weekly. Corner's whole angle is ephemeral.</td></tr>
+      <tr><td><strong>Engagement</strong></td><td>Likes / saves / comments as a demand proxy</td></tr>
+      <tr><td><strong>Proximity &amp; timing</strong></td><td>Near the user, happening soon</td></tr>
+      <tr><td><strong>Extraction confidence</strong></td><td>We only rank high what we're sure we understood</td></tr>
+    </tbody>
+  </table></div>
+  <p>Ranking is a <strong>first-class output</strong>, not an afterthought — it's the product-judgment layer.</p>
+
+  <h3>Surfacing it — event tiers, the way Corner tiers places</h3>
+  <p>Corner already speaks in vibe tiers for places; events get the same language, computed from
+    <strong>engagement (likes · comments · shares) aggregated across every post about that event</strong> —
+    which the dedup model makes possible, since many posts resolve to one <code>event_id</code>. The three
+    tiers are <strong>three different axes</strong>, not one popularity scale:</p>
+  <div class="tiers">
+    <div class="tier">
+      <div class="name"><span class="tdot" style="background:var(--green)"></span>Lowkey</div>
+      <div class="axis">Hidden gem · quality</div>
+      <p>Low reach <em>but</em> a positive signal — trusted curator, or high engagement-rate for a small
+      account. Guard: must mean “under-the-radar gem,” <strong>not “nobody cared.”</strong></p>
+    </div>
+    <div class="tier">
+      <div class="name"><span class="tdot" style="background:var(--blue)"></span>Popular</div>
+      <div class="axis">Magnitude</div>
+      <p>High total engagement across all observed posts. The steady, broadly-loved events.</p>
+    </div>
+    <div class="tier">
+      <div class="name"><span class="tdot" style="background:var(--amber)"></span>Trending</div>
+      <div class="axis">Velocity</div>
+      <p>Engagement <em>accelerating</em> now — and/or several accounts posting it in a short window. Pairs
+      directly with ephemerality: “blowing up right now.”</p>
+    </div>
+  </div>
+  <p><strong>Two rules so the tiers don't lie:</strong> normalize on <strong>engagement rate</strong>
+    (interactions ÷ the account's own baseline) so big accounts don't win everything, and apply
+    <strong>time-decay</strong> so tiers recompute over an event's life — an event can move
+    lowkey&nbsp;→&nbsp;trending&nbsp;→&nbsp;popular. The same freshness job that expires events recomputes tiers.</p>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">The core hard problem</span>
+  <h2><span class="n">03</span> Identity &amp; dedup</h2>
+  <p class="lede">Answering the one question a founder wrote down.</p>
+
+  <div class="callout">
+    <span class="tag">Founder question · Jake</span>
+    <p class="q">“How do we make sure our ‘primary keys’ are accurate and unique?”</p>
+  </div>
+
+  <div class="answer">
+    <div class="lbl">Short answer</div>
+    <p><strong>You don't key on natural fields.</strong> <code>(place, desc, time)</code> is too noisy to
+    ever be unique — descriptions are free text, times are written as “this Fri,” and the same event gets
+    reposted five different ways.</p>
+  </div>
+
+  <p><strong>1 · Surrogate key.</strong> Every event gets a UUID <code>event_id</code>. That's the real
+    primary key — stable and unique by construction.</p>
+  <p><strong>2 · Derived dedup signature</strong> — how we decide two extractions are the <em>same</em> event:</p>
+  <div class="sig"><b>dedup_sig</b> = venue_place_id + normalized_start_datetime (bucketed) + title/embedding similarity ≥ τ</div>
+  <ul>
+    <li><code>venue_place_id</code> comes from <strong>Google Places</strong> — canonical, not free-text — and hands us <strong>geo coords for the map</strong> for free.</li>
+    <li><code>normalized_start_datetime</code> requires resolving relative dates first (§5). <strong>This is the linchpin</strong> — you can't dedup on a date you haven't normalized.</li>
+    <li>title match is fuzzy + embedding cosine, so “Devin Shaffer b2b” and “Devin Shaffer live” collapse.</li>
+  </ul>
+  <p><strong>3 · Re-posts attach, they don't duplicate.</strong> A second post about the same event becomes a
+    new <code>source</code> row linked to the existing <code>event_id</code> — never a new event. That's also
+    how we <em>raise confidence</em> (two sources agree) and <em>enrich</em> (one has the price, another the lineup).</p>
+
+  <h3>The failure modes naive dedup breaks on</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Failure mode</th><th>Naive result</th><th>Our handling</th></tr></thead>
+    <tbody>
+      <tr><td>Same event, <strong>two venues</strong> (a tour/crawl)</td><td class="was">Merged into one wrong event</td><td class="rec">Signature is per (venue×time); modeled as <b>linked instances</b></td></tr>
+      <tr><td><strong>Two events, one venue,</strong> same night</td><td class="was">Wrongly merged</td><td class="rec">Title/embedding <b>similarity threshold</b> keeps them apart</td></tr>
+      <tr><td><strong>Recurring series</strong> vs one-off</td><td class="was">Explodes into dupes, or collapses distinct nights</td><td class="rec"><b>recurrence_rule</b>; each dated occurrence is its own row</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<section><div class="bleed">
+  <div class="wrap" style="padding:0">
+    <span class="eyebrow">System design</span>
+    <h2><span class="n">04</span> Architecture</h2>
+    <p class="lede">Your Agent 1 / 2 / 3 is the right decomposition. I keep it — and expand Agent 1 into named
+      stages, because that's where data quality is won or lost. <span style="color:var(--blue)">Blue = stages you don't have yet.</span></p>
+  </div>
+
+  <div class="diagram">
+    <div class="flow">
+      <div class="node src"><div class="t">Sources</div><div class="d">IG accounts · hashtags · location tags → Orchestrator / Scheduler</div></div>
+      <div class="arrow"></div>
+
+      <div class="group">
+        <span class="glabel">Agent 1 — ingest &amp; structure</span>
+        <div class="node"><span class="stage">A</span><div class="t">Scrape · Apify</div><div class="d">posts · reels · stories</div></div>
+        <div class="arrow"></div>
+        <div class="node newstage"><span class="stage">B</span><div class="t">Event-gate <span class="newpill">NEW</span></div><div class="d">“is this even an event?” → drop memes &amp; café recs before paying for vision</div></div>
+        <div class="arrow"></div>
+        <div class="node"><span class="stage">C</span><div class="t">Extract · LLM</div><div class="d">vision + caption → fields, per-field confidence + evidence span</div></div>
+        <div class="arrow"></div>
+        <div class="node newstage"><span class="stage">D</span><div class="t">Resolve <span class="newpill">NEW</span></div><div class="d">relative-date normalization + Google Places venue match → lat/lng</div></div>
+      </div>
+
+      <div class="arrow lbl" data-l="structured JSON"></div>
+
+      <div class="group">
+        <span class="glabel">Agent 2 — identity (new events)</span>
+        <div class="node"><span class="stage">E</span><div class="t">Dedup signature</div><div class="d">match against existing events</div></div>
+        <div class="arrow lbl" data-l="new / duplicate"></div>
+        <div class="branch">
+          <div class="node"><div class="t">New →</div><div class="d">mint event_id, ingest</div></div>
+          <div class="node"><div class="t">Duplicate →</div><div class="d">attach source, hand to Agent 3</div></div>
+        </div>
+      </div>
+
+      <div class="arrow"></div>
+
+      <div class="group">
+        <span class="glabel">Agent 3 — updates</span>
+        <div class="node"><span class="stage">F</span><div class="t">Merge / enrich</div><div class="d">fold overlapping info into the existing event</div></div>
+      </div>
+
+      <div class="arrow"></div>
+      <div class="node store"><div class="t">Store</div><div class="d">venues · events · sources · event_sources &nbsp;·&nbsp; low-confidence → review queue</div></div>
+      <div class="arrow lbl" data-l="rank / curate"></div>
+      <div class="node"><div class="t">“Best” ranking</div><div class="d">authority · scarcity · engagement · proximity · confidence → tier: lowkey · popular · trending</div></div>
+      <div class="arrow"></div>
+      <div class="node map"><div class="t">Corner map</div><div class="d">events pinned, with source attribution</div></div>
+    </div>
+
+    <div class="legend">
+      <span><i class="dot" style="background:var(--blue)"></i>new stage</span>
+      <span><i class="dot" style="background:var(--green)"></i>storage</span>
+      <span><i class="dot" style="background:var(--line);border:1px dashed var(--ink-3)"></i>source / boundary</span>
+    </div>
+  </div>
+
+  <div class="wrap" style="padding:0;margin-top:22px">
+    <h3>The two stages you don't have yet — and why they matter most</h3>
+    <ul>
+      <li><strong>B · Event-gate (the biggest gap).</strong> <code>@newyorklocals</code> posts memes and café
+        recs, not just events. Extracting every post wastes vision cost <em>and</em> hurts precision — a meme
+        shown as an event is worse than a missed one when the brief says surface the <em>best</em>.</li>
+      <li><strong>D · Date resolution.</strong> Captions say “tonight,” “this Friday.” Resolve against the
+        <strong>post's timestamp + timezone</strong>. Small, but load-bearing: without it you can neither rank by
+        “happening soon” nor dedup by date.</li>
+    </ul>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">Data quality</span>
+  <h2><span class="n">05</span> Messy IG → clean events</h2>
+  <p class="lede">Extraction is where vision LLMs quietly fabricate. Design against it.</p>
+  <p><strong>Fields</strong> (yours, kept): cover image, venue name, address, description, start/end datetime,
+    RSVP deadline, capacity, age limit, cost, category, external link — plus <code>source_url</code>,
+    <code>source_account</code>, per-field <code>confidence</code>, <code>evidence_span</code>.</p>
+  <p><strong>Reels:</strong> don't run vision on every frame — sample keyframes + transcribe audio (Whisper) +
+    read the caption. Most info lives in the caption and one flyer frame; escalate to dense vision only when those are thin.</p>
+  <h3>Anti-hallucination rules</h3>
+  <ul>
+    <li><strong>Per-field confidence</strong> — the model rates its own certainty.</li>
+    <li><strong>Evidence span required</strong> — the caption text or image region a value came from.</li>
+    <li><strong><code>null</code> beats a guess</strong> — a missing price is fine; a confident wrong <code>$27 / 21+</code> is a support ticket.</li>
+  </ul>
+  <p><strong>Venue accuracy</strong> (your Google Places step, sharpened): feed <code>name + address</code> to
+    Places, take the top match above threshold, store <code>place_id + lat/lng</code>. No confident match →
+    <strong>hold, don't drop</strong> (it may be a brand-new venue). This is what makes an event map-able.</p>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">Freshness</span>
+  <h2><span class="n">06</span> Ephemerality &amp; lifecycle</h2>
+  <p class="lede">Events aren't static rows — they have a life.</p>
+  <p>Model a status — <code>upcoming → live → past → archived</code> (+ <code>cancelled</code>). A scheduled job
+    flips it by time and <strong>auto-hides past events from the map</strong>; the screenshots show a live
+    “events nearby” rail, and stale events erode trust fast. <strong>Stories (24h TTL)</strong> are the most
+    ephemeral and often richest event source — scrape them on a faster cadence than posts.</p>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">The recommendation</span>
+  <h2><span class="n">07</span> Deltas to your design</h2>
+  <p class="lede">Not a redesign — targeted changes to your Agent 1/2/3, and why.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Your design</th><th>Recommendation</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td class="was">PK = (place, desc, time)</td><td class="rec">Surrogate <b>event_id</b> + derived dedup signature</td><td>Natural fields are never unique; answers Jake directly</td></tr>
+      <tr><td class="was">Extract every scraped post</td><td class="rec">Insert an <b>event-gate</b> before extraction</td><td>Precision + cost — not every post is an event</td></tr>
+      <tr><td class="was">“time and date” as a field</td><td class="rec"><b>Relative-date resolver</b> from post timestamp</td><td>Can't rank/dedup on unresolved “this Friday”</td></tr>
+      <tr><td class="was">Places for name accuracy</td><td class="rec">Also <b>store place_id + lat/lng</b>; hold-don't-drop</td><td>It's the map-ability step, not just spell-check</td></tr>
+      <tr><td class="was">Extract all fields</td><td class="rec"><b>Confidence + evidence + null&gt;guess</b></td><td>Vision LLMs fabricate capacity/price/age</td></tr>
+      <tr><td class="was">Ingest / not-ingest</td><td class="rec">Add a <b>review queue</b> for low confidence</td><td>Human catches what the model isn't sure of</td></tr>
+      <tr><td class="was">Events are permanent</td><td class="rec"><b>Lifecycle + TTL + auto-expire</b></td><td>Corner's angle is ephemeral; stale = untrusted</td></tr>
+      <tr><td class="was">(missing) ranking</td><td class="rec"><b>“Best” score → lowkey / popular / trending</b> tiers</td><td>Brief says best, not all; mirrors how Corner tiers places</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">Scope</span>
+  <h2><span class="n">08</span> MVP &amp; the golden test</h2>
+  <p class="lede">Ship a hosted slice that proves the whole pipe.</p>
+  <ul>
+    <li>Scrape ~5 seed NYC accounts.</li>
+    <li>Event-gate → extract → resolve date → resolve venue → structured JSON.</li>
+    <li>Dedup + store (Postgres + pgvector for embedding similarity).</li>
+    <li>A hosted webapp that is a <strong>faithful clone of the Corner app</strong> (see below), with source attribution.</li>
+  </ul>
+
+  <h3>UI parity — it should feel like Corner</h3>
+  <p>A presentation requirement, not polish: the demo must read as “ships in the app tomorrow,” not “a
+    pipeline with a rough UI.” Match the reference screenshots — <strong>map-first full-screen</strong> with
+    circular pins, the <strong>category chips</strong> (<code>top picks · eat · cafes · bars · events · go out</code>,
+    <code>events</code> selected by default), the <strong>“events nearby” list</strong> (venue headers + horizontal
+    cards: cover, title, date, price), the <strong>bottom nav</strong>, and the top search bar. The
+    <strong>lowkey / popular / trending</strong> tiers render as filter chips — Corner's own vibe-filter
+    pattern — so the feature reads as native. Events show up <strong>both</strong> as map pins and in the list,
+    off the same <code>events</code> table.</p>
+  <p><strong>UI tech:</strong> React + <strong>MapLibre GL</strong> (free, no token) or Mapbox GL with a custom
+    light style; event pins as custom HTML markers; the rest plain CSS. Reuse Corner's exact vocabulary, chip
+    layout, pin style, and typography.</p>
+  <div class="answer">
+    <div class="lbl">Golden acceptance test</div>
+    <p>The <strong>two reference IG posts</strong> the interviewer handed over must be demonstrably ingested and
+    <strong>correctly pinned</strong> — right venue, right date, deduped if related. Those URLs are the implicit
+    test; passing them is the definition of done.</p>
+  </div>
+  <p class="src-note">Cut for MVP (stub, don't build): review-queue UI, multi-city, stories cadence, account-discovery loop, ranking beyond a simple score.</p>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">Phase 2</span>
+  <h2><span class="n">09</span> Build sequence</h2>
+  <p class="lede">Prove the pipe end-to-end on two posts before scaling to accounts.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th class="num">#</th><th>Step</th><th>Done when</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>Skeleton</strong></td><td>Repo + Postgres schema (venues/events/sources/event_sources) + API keys wired</td></tr>
+      <tr><td class="num">2</td><td><strong>Ingest one post</strong></td><td>Two reference URLs → Apify → raw JSON in DB</td></tr>
+      <tr><td class="num">3</td><td><strong>Extract</strong></td><td>Event-gate + field extraction w/ confidence on those two</td></tr>
+      <tr><td class="num">4</td><td><strong>Resolve</strong></td><td>Date normalized + Places → lat/lng</td></tr>
+      <tr><td class="num">5</td><td><strong>Dedup + store</strong></td><td>Signature mints/attaches; event_sources populated</td></tr>
+      <tr><td class="num">6</td><td><strong>Scale sources</strong></td><td>5 seed accounts, batched</td></tr>
+      <tr><td class="num">7</td><td><strong>UI (Corner clone)</strong></td><td>React + MapLibre map, event pins, category chips (<code>events</code> default), “events nearby” list, bottom nav, lowkey/popular/trending filter chips — pixel-matched</td></tr>
+      <tr><td class="num">8</td><td><strong>Demo</strong></td><td>Golden posts live on the Corner-style map + a fresh batch</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<section><div class="wrap">
+  <span class="eyebrow">Closing the loop</span>
+  <h2><span class="n">10</span> Risks, metrics, open questions</h2>
+  <h3>Risks</h3>
+  <ul>
+    <li>IG scraping fragility &amp; ToS — keep it read-only, cached, attributed.</li>
+    <li>Vision hallucination on flyers — mitigated by confidence + evidence + null&gt;guess.</li>
+    <li>Venue mismatch for brand-new / unlisted spots — hold-don't-drop.</li>
+    <li>Dedup threshold tuning — too tight = dupes, too loose = merged distinct events.</li>
+  </ul>
+  <h3>Metrics</h3>
+  <ul>
+    <li>Extraction precision/recall on a hand-labeled set.</li>
+    <li>Dedup false-merge &amp; false-split rate.</li>
+    <li>% events with a confident venue match.</li>
+    <li>Freshness: median lag from post → live on map.</li>
+    <li>“Best”-ranking agreement with a human curator.</li>
+  </ul>
+  <h3>Open questions for the founders</h3>
+  <ul>
+    <li>How much human curation is acceptable vs. fully automated?</li>
+    <li>Is user-submitted content in scope later?</li>
+    <li>Precision vs. recall bias — what's the tolerance for one wrong event on the map?</li>
+  </ul>
+</div></section>
+
+<footer><div class="wrap">
+  CORNER · EVENTS INGESTION · PHASE 1 PLAN · NYC<br>
+  Sources: corner.inc · Apify Instagram Scraper · Google Places API
+</div></footer>
