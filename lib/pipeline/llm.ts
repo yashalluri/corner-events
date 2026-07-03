@@ -6,7 +6,7 @@
 // so the pipeline still runs end-to-end.
 
 import OpenAI from 'openai';
-import { CITY, EXTRACT_MODEL, GATE_MODEL, env } from '../config';
+import { CATEGORIES, CITY, EXTRACT_MODEL, GATE_MODEL, env } from '../config';
 import type { Extraction, FieldValue, RawPost } from '../types';
 
 let client: OpenAI | null = null;
@@ -80,8 +80,6 @@ const NUM_FIELD_SCHEMA = {
   ...FIELD_SCHEMA,
   properties: { ...FIELD_SCHEMA.properties, value: { type: ['number', 'null'] } },
 } as const;
-
-export const CATEGORIES = ['food', 'music', 'art', 'nightlife', 'market', 'fitness', 'comedy', 'other'] as const;
 
 // Category is schema-ENFORCED, not just prompted — 'attractions' etc. can't leak.
 const CATEGORY_FIELD_SCHEMA = {

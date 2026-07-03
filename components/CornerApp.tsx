@@ -7,8 +7,9 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { engagement } from '@/lib/pipeline/tiers';
 import type { EventTier, EventWithVenue } from '@/lib/types';
-import { CATEGORY_EMOJI, formatCost, formatWhen } from '@/lib/ui';
+import { CATEGORY_EMOJI, TIER_EMOJI, formatCost, formatWhen } from '@/lib/ui';
 import CoverArt from './CoverArt';
 
 const MapView = dynamic(() => import('./MapView'), { ssr: false });
@@ -24,9 +25,9 @@ const CATEGORIES = [
 
 const TIERS: { key: EventTier | 'all'; label: string; emoji?: string }[] = [
   { key: 'all', label: 'all' },
-  { key: 'lowkey', label: 'lowkey', emoji: '🌱' },
-  { key: 'popular', label: 'popular', emoji: '💙' },
-  { key: 'trending', label: 'trending', emoji: '🔥' },
+  { key: 'lowkey', label: 'lowkey', emoji: TIER_EMOJI.lowkey },
+  { key: 'popular', label: 'popular', emoji: TIER_EMOJI.popular },
+  { key: 'trending', label: 'trending', emoji: TIER_EMOJI.trending },
 ];
 
 export default function CornerApp() {
@@ -92,11 +93,23 @@ export default function CornerApp() {
   const selected = selectedId ? visible.find((e) => e.id === selectedId) ?? null : null;
 
   // Tap-through target: the highest-engagement source post (matters for
-  // trending events that have several). This link IS the attribution now.
+  // trending events that have several). Uses the SAME engagement formula as
+  // the tier computation so the link can't diverge from the tier reason.
   const igUrl = (e: EventWithVenue) =>
-    [...e.sources].sort(
-      (a, b) => b.likes + 3 * b.comments - (a.likes + 3 * a.comments),
-    )[0]?.url ?? '#';
+    [...e.sources].sort((a, b) => engagement(b.likes, b.comments) - engagement(a.likes, a.comments))[0]
+      ?.url ?? '#';
+
+  // Chip counts: one pass over events when they change, not N filters per render.
+  const counts = useMemo(() => {
+    const byTier: Record<string, number> = {};
+    const byCat: Record<string, number> = {};
+    for (const e of events ?? []) {
+      if (!e.venue) continue;
+      if (e.tier) byTier[e.tier] = (byTier[e.tier] ?? 0) + 1;
+      byCat[e.category] = (byCat[e.category] ?? 0) + 1;
+    }
+    return { byTier, byCat };
+  }, [events]);
 
   return (
     <div className="stage">
@@ -164,8 +177,7 @@ export default function CornerApp() {
                 </div>
                 {selected.tier && selected.tier_reason && (
                   <div className={`detail-reason t-${selected.tier}`}>
-                    {selected.tier === 'trending' ? '🔥' : selected.tier === 'popular' ? '💙' : '🌱'}{' '}
-                    {selected.tier_reason}
+                    {TIER_EMOJI[selected.tier]} {selected.tier_reason}
                   </div>
                 )}
                 <div className="detail-ig">Instagram ↗</div>
@@ -232,25 +244,24 @@ export default function CornerApp() {
               >
                 {t.emoji ? `${t.emoji} ` : ''}
                 {t.label}
-                {t.key !== 'all' && events && (
-                  <span className="cnt">{events.filter((e) => e.tier === t.key && e.venue).length}</span>
+                {t.key !== 'all' && (
+                  <span className="cnt">{counts.byTier[t.key as string] ?? 0}</span>
                 )}
               </button>
             ))}
             {/* event-category filters — only categories that have events show */}
-            {events &&
-              Object.entries(CATEGORY_EMOJI)
-                .filter(([cat]) => events.some((e) => e.venue && e.category === cat))
-                .map(([cat, emoji]) => (
-                  <button
-                    key={cat}
-                    className={`chip${eventCat === cat ? ' selected' : ''}`}
-                    onClick={() => setEventCat(eventCat === cat ? null : cat)}
-                  >
-                    {emoji} {cat}
-                    <span className="cnt">{events.filter((e) => e.venue && e.category === cat).length}</span>
-                  </button>
-                ))}
+            {Object.entries(CATEGORY_EMOJI)
+              .filter(([cat]) => counts.byCat[cat])
+              .map(([cat, emoji]) => (
+                <button
+                  key={cat}
+                  className={`chip${eventCat === cat ? ' selected' : ''}`}
+                  onClick={() => setEventCat(eventCat === cat ? null : cat)}
+                >
+                  {emoji} {cat}
+                  <span className="cnt">{counts.byCat[cat]}</span>
+                </button>
+              ))}
           </div>
 
           <div className="cats">

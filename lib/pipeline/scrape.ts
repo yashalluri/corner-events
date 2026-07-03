@@ -8,6 +8,17 @@ import type { RawPost } from '../types';
 
 const APIFY_ACTOR = 'apify~instagram-scraper';
 
+/** Run URL + input body for the scraper — shared with scripts/check-live.ts so
+ *  the health probe and the real pipeline can't drift apart. */
+export const apifyRunUrl = (token: string) =>
+  `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${token}&timeout=300`;
+export const apifyInput = (directUrls: string[], resultsLimit: number) => ({
+  directUrls,
+  resultsType: 'posts' as const,
+  resultsLimit,
+  addParentData: false,
+});
+
 interface ApifyItem {
   id?: string;
   shortCode?: string;
@@ -18,7 +29,6 @@ interface ApifyItem {
   ownerUsername?: string;
   likesCount?: number;
   commentsCount?: number;
-  videoViewCount?: number;
   locationName?: string;
   type?: string;
 }
@@ -40,7 +50,6 @@ function normalize(item: ApifyItem): RawPost | null {
     ownerUsername: item.ownerUsername ?? ownerFromUrl ?? 'unknown',
     likesCount: likes,
     commentsCount: comments,
-    videoViewCount: item.videoViewCount,
     locationName: item.locationName,
     type: (item.type as RawPost['type']) ?? 'Image',
   };
@@ -52,19 +61,11 @@ async function scrapeLive(extraUrls: string[]): Promise<RawPost[]> {
     ...SEED_ACCOUNTS.map((a) => `https://www.instagram.com/${a.username}/`),
     ...extraUrls,
   ];
-  const res = await fetch(
-    `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${token}&timeout=300`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        directUrls,
-        resultsType: 'posts',
-        resultsLimit: POSTS_PER_ACCOUNT,
-        addParentData: false,
-      }),
-    },
-  );
+  const res = await fetch(apifyRunUrl(token!), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(apifyInput(directUrls, POSTS_PER_ACCOUNT)),
+  });
   if (!res.ok) throw new Error(`Apify ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const items = (await res.json()) as ApifyItem[];
   return items.map(normalize).filter((p): p is RawPost => p !== null);

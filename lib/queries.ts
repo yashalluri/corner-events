@@ -2,7 +2,7 @@
 // status column to drift, nothing for the cron to flip. Ephemerality = past
 // events simply stop being returned.
 
-import { env } from './config';
+import { env, isIgCdnUrl } from './config';
 import { getDb, isEmpty } from './db';
 import { neighborhoodFor } from './neighborhoods';
 import { runPipeline } from './pipeline/run';
@@ -11,11 +11,11 @@ import type { EventStatus, EventWithVenue } from './types';
 let hydrating: Promise<void> | null = null;
 
 /** Demo self-healing: on a cold empty store, run the pipeline once so the app
- *  is never blank — but ONLY in full fixture mode. With live keys set, a page
- *  view must never trigger a slow, costly scrape+LLM run; live data arrives
- *  via `npm run ingest` or the cron. */
+ *  is never blank — but ONLY in full fixture mode. If ANY live key is set
+ *  (scrape, LLM, or Places), a page view must never trigger billable work;
+ *  live data arrives via `npm run ingest` or the cron. */
 async function ensureHydrated(): Promise<void> {
-  if (env.apify()) return; // live mode: cron/CLI owns ingestion
+  if (env.anyLive()) return; // any paid stage configured: cron/CLI owns ingestion
   if (!hydrating) {
     hydrating = (async () => {
       if (await isEmpty()) await runPipeline();
@@ -47,20 +47,23 @@ interface EventQueryRow {
 export async function listEvents(opts?: { includePast?: boolean }): Promise<EventWithVenue[]> {
   await ensureHydrated();
   const db = await getDb();
-  const rows = await db.query<EventQueryRow>(`
-    SELECT e.*, e.start_at::text AS start_at, e.end_at::text AS end_at,
-           e.created_at::text AS created_at, e.updated_at::text AS updated_at,
-           v.name AS v_name, v.address AS v_address, v.lat AS v_lat, v.lng AS v_lng, v.neighborhood AS v_hood
-    FROM events e LEFT JOIN venues v ON v.id = e.venue_id
-    ORDER BY e.start_at ASC NULLS LAST
-  `);
-
-  const sourceRows = await db.query<{
-    event_id: string; owner_username: string; url: string; likes: number; comments: number; posted_at: string;
-  }>(`
-    SELECT es.event_id, p.owner_username, p.url, p.likes, p.comments, p.posted_at::text AS posted_at
-    FROM event_sources es JOIN posts p ON p.id = es.post_id
-  `);
+  // Independent queries — run them concurrently (saves a network round-trip
+  // on the hosted Postgres path; PGlite serializes them harmlessly).
+  const [rows, sourceRows] = await Promise.all([
+    db.query<EventQueryRow>(`
+      SELECT e.*, e.start_at::text AS start_at, e.end_at::text AS end_at,
+             e.created_at::text AS created_at, e.updated_at::text AS updated_at,
+             v.name AS v_name, v.address AS v_address, v.lat AS v_lat, v.lng AS v_lng, v.neighborhood AS v_hood
+      FROM events e LEFT JOIN venues v ON v.id = e.venue_id
+      ORDER BY e.start_at ASC NULLS LAST
+    `),
+    db.query<{
+      event_id: string; owner_username: string; url: string; likes: number; comments: number; posted_at: string;
+    }>(`
+      SELECT es.event_id, p.owner_username, p.url, p.likes, p.comments, p.posted_at::text AS posted_at
+      FROM event_sources es JOIN posts p ON p.id = es.post_id
+    `),
+  ]);
   const sourcesByEvent = new Map<string, typeof sourceRows>();
   for (const s of sourceRows) {
     const list = sourcesByEvent.get(s.event_id) ?? [];
@@ -72,7 +75,13 @@ export async function listEvents(opts?: { includePast?: boolean }): Promise<Even
     id: r.id, title: r.title, description: r.description, venue_id: r.venue_id,
     start_at: r.start_at, end_at: r.end_at, cost: r.cost, age_limit: r.age_limit,
     capacity: r.capacity, category: r.category, external_link: r.external_link,
-    cover_url: r.cover_url, confidence: r.confidence,
+    // Presentation-ready cover: IG CDN URLs must go through our same-origin
+    // proxy (browser CORP blocking) — decided here once, not in components.
+    cover_url:
+      r.cover_url && isIgCdnUrl(r.cover_url)
+        ? `/api/img?src=${encodeURIComponent(r.cover_url)}`
+        : r.cover_url,
+    confidence: r.confidence,
     tier: (r.tier as EventWithVenue['tier']) ?? null, tier_reason: r.tier_reason,
     popular_score: r.popular_score, heat_score: r.heat_score,
     created_at: r.created_at, updated_at: r.updated_at,
@@ -84,7 +93,7 @@ export async function listEvents(opts?: { includePast?: boolean }): Promise<Even
           address: r.v_address,
           lat: r.v_lat,
           lng: r.v_lng,
-          // Live Places lookups don't return neighborhoods — derive from coords.
+          // Fallback for venues ingested before write-time derivation.
           neighborhood: r.v_hood ?? neighborhoodFor(r.v_lat, r.v_lng),
         }
       : null,

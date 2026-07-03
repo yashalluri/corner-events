@@ -96,13 +96,21 @@ export async function runPipeline(): Promise<PipelineStats> {
       const venue = await resolveVenue(extraction);
       if (!venue) stats.venue_unresolved++; // hold-don't-drop: event still stored, off-map
 
-      const result = await upsertEvent(db, post, extraction, venue);
+      // Resolve the display title here (needs venue + category context); real
+      // captions sometimes yield none — synthesize a readable fallback.
+      const cat = extraction.category.value ?? 'event';
+      const catLabel = cat[0].toUpperCase() + cat.slice(1);
+      const title =
+        extraction.title.value?.trim() ||
+        (venue ? `${catLabel} at ${venue.name}` : `${catLabel} (details in post)`);
+
+      const result = await upsertEvent(db, post, extraction, venue, title);
       if (result.action === 'inserted') stats.inserted++;
       else if (result.action === 'merged') stats.merged++;
       else stats.skipped_duplicates++;
 
       await db.query(`UPDATE posts SET processed=true WHERE id=$1`, [post.id]);
-      log(post, `gate:✓ extract:✓ venue:${venue ? '✓ ' + venue.name : '✗ needs_review'} → ${result.action} "${(extraction.title.value ?? '').slice(0, 40)}"`);
+      log(post, `gate:✓ extract:✓ venue:${venue ? '✓ ' + venue.name : '✗ needs_review'} → ${result.action} "${title.slice(0, 40)}"`);
     } catch (e) {
       stats.errors.push(`${post.id}: ${e instanceof Error ? e.message : String(e)}`);
       log(post, `ERROR: ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`);

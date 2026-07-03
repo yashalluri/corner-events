@@ -42,10 +42,10 @@ function daysFromNow(days: number, hour: number): Date {
 const iso = (d: Date) => d.toISOString();
 const ago = (hours: number) => new Date(now() - hours * H).toISOString();
 
-function fv<T>(value: T | null, confidence = 0.92, evidence: string | null = null): FieldValue<T> {
+export function fv<T>(value: T | null, confidence = 0.92, evidence: string | null = null): FieldValue<T> {
   return { value, confidence, evidence };
 }
-const nul = <T,>(): FieldValue<T> => ({ value: null, confidence: 0, evidence: null });
+export const nul = <T,>(): FieldValue<T> => ({ value: null, confidence: 0, evidence: null });
 
 function extraction(p: {
   title: string;

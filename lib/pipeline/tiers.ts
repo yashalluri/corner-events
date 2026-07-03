@@ -24,7 +24,9 @@ interface PostAgg {
   authority: number | null;
 }
 
-const engagement = (likes: number, comments: number) => likes + 3 * comments;
+/** The one engagement formula — tiers AND the UI's "top source post" ranking
+ *  use this, so the pin's tier reason and its tap-through link can't diverge. */
+export const engagement = (likes: number, comments: number) => likes + 3 * comments;
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
@@ -98,7 +100,7 @@ export async function recomputeTiers(db: Db): Promise<void> {
 
   // 4. Assign tiers. Priority: trending > popular > lowkey (an event can qualify
   //    for several; the most time-sensitive label wins — Corner's angle is ephemeral).
-  for (const s of scores) {
+  const assignments = scores.map((s) => {
     let tier: string | null = null;
     let reason: string | null = null;
 
@@ -120,10 +122,25 @@ export async function recomputeTiers(db: Db): Promise<void> {
           ? `${s.maxRate.toFixed(1)}× its account's usual engagement`
           : 'from a trusted curator, still under the radar';
     }
+    return { id: s.eventId, tier, reason, popular: s.popular, heat: s.heat };
+  });
 
+  // 5. One bulk UPDATE instead of N round-trips (matters at cron scale).
+  if (assignments.length > 0) {
+    const params: unknown[] = [];
+    const values = assignments
+      .map((a, i) => {
+        const b = i * 5;
+        params.push(a.id, a.tier, a.reason, a.popular, a.heat);
+        return `($${b + 1}::text, $${b + 2}::text, $${b + 3}::text, $${b + 4}::float8, $${b + 5}::float8)`;
+      })
+      .join(',');
     await db.query(
-      `UPDATE events SET tier=$2, tier_reason=$3, popular_score=$4, heat_score=$5, updated_at=now() WHERE id=$1`,
-      [s.eventId, tier, reason, s.popular, s.heat],
+      `UPDATE events e SET tier = v.tier, tier_reason = v.reason,
+              popular_score = v.pop, heat_score = v.heat, updated_at = now()
+       FROM (VALUES ${values}) AS v(id, tier, reason, pop, heat)
+       WHERE e.id = v.id`,
+      params,
     );
   }
 }

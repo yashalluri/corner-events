@@ -12,7 +12,6 @@ export interface RawPost {
   ownerUsername: string;
   likesCount: number;
   commentsCount: number;
-  videoViewCount?: number;
   locationName?: string;
   type: 'Image' | 'Video' | 'Sidecar';
   /** Fixture-only: deterministic extraction used when no OPENAI_API_KEY. */

@@ -49,14 +49,11 @@ export async function upsertEvent(
   post: RawPost,
   x: Extraction,
   venue: Venue | null,
+  /** Final display title, resolved by the orchestrator. Also feeds the dedup
+   *  signature, so it's a parameter — not synthesized here — to keep this
+   *  module pure compare-and-write. */
+  title: string,
 ): Promise<UpsertResult> {
-  // Real captions sometimes yield no usable title — synthesize a readable one
-  // from category + venue instead of showing an empty pin label.
-  const cat = x.category.value ?? 'event';
-  const fallbackTitle = venue
-    ? `${cat[0].toUpperCase()}${cat.slice(1)} at ${venue.name}`
-    : `${cat[0].toUpperCase()}${cat.slice(1)} (details in post)`;
-  const title = x.title.value?.trim() || fallbackTitle;
   const startAt = x.startDatetime.value;
 
   // 1. Ensure venue row exists.

@@ -55,11 +55,16 @@ const HOODS: Hood[] = [
 
 const MAX_KM = 3.5; // beyond this, don't pretend we know the neighborhood
 
+/** Equirectangular km distance — accurate to well under 1% at NYC scale. */
+export function kmBetween(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  return Math.hypot((lat1 - lat2) * 111, (lng1 - lng2) * 111 * Math.cos((lat1 * Math.PI) / 180));
+}
+
 export function neighborhoodFor(lat: number, lng: number): string | null {
   let best: string | null = null;
   let bestKm = Infinity;
   for (const h of HOODS) {
-    const km = Math.hypot((lat - h.lat) * 111, (lng - h.lng) * 111 * Math.cos((lat * Math.PI) / 180));
+    const km = kmBetween(lat, lng, h.lat, h.lng);
     if (km < bestKm) {
       bestKm = km;
       best = h.name;

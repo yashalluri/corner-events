@@ -1,6 +1,11 @@
 // Small presentation helpers shared by map pins, cards, and the detail view.
 
-export const CATEGORY_EMOJI: Record<string, string> = {
+import type { Category } from './config';
+import type { EventTier } from './types';
+
+// `satisfies` ties this to the canonical CATEGORIES vocabulary — adding a 9th
+// category without an emoji is a type error, not a silent 🎟️ fallback.
+export const CATEGORY_EMOJI = {
   food: '🍜',
   music: '🎧',
   art: '🎨',
@@ -9,10 +14,16 @@ export const CATEGORY_EMOJI: Record<string, string> = {
   fitness: '🏃',
   comedy: '🎤',
   other: '🎟️',
+} satisfies Record<Category, string>;
+
+export const TIER_EMOJI: Record<NonNullable<EventTier>, string> = {
+  trending: '🔥',
+  popular: '💙',
+  lowkey: '🌱',
 };
 
 export function catEmoji(category: string): string {
-  return CATEGORY_EMOJI[category] ?? CATEGORY_EMOJI.other;
+  return (CATEGORY_EMOJI as Record<string, string>)[category] ?? CATEGORY_EMOJI.other;
 }
 
 /** "Tonight · 7:30 PM", "Tomorrow · 10 PM", "Fri · 12 PM" — Corner-style. */
@@ -37,8 +48,7 @@ export function formatWhen(startIso: string | null): string {
 
 export function formatCost(cost: string | null): string {
   if (!cost) return '';
-  if (/^free$/i.test(cost)) return 'Free';
-  return cost.startsWith('$') || /^from/i.test(cost) ? cost : cost;
+  return /^free$/i.test(cost) ? 'Free' : cost;
 }
 
 // Deterministic gradient cover per event (works offline; IG images swap in

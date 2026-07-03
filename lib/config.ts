@@ -39,6 +39,22 @@ export const POSTS_PER_ACCOUNT = 12; // recent posts pulled per seed account
 export const GATE_MODEL = 'gpt-4o-mini'; // cheap binary classifier, runs on everything
 export const EXTRACT_MODEL = 'gpt-4o'; // vision+structured extraction, runs on gated posts
 
+/** Canonical event-category vocabulary — single source of truth for the
+ *  extraction schema, the normalizer, and the UI emoji map. */
+export const CATEGORIES = ['food', 'music', 'art', 'nightlife', 'market', 'fitness', 'comedy', 'other'] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+/** IG/FB CDN hostnames (hostname-anchored) — shared by the image-proxy
+ *  allowlist and the "does this cover need proxying?" rewrite. */
+export const IG_CDN_HOST_RE = /(^|\.)cdninstagram\.com$|(^|\.)fbcdn\.net$/i;
+export function isIgCdnUrl(url: string): boolean {
+  try {
+    return IG_CDN_HOST_RE.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 // ── Dedup thresholds ──
 export const TITLE_SIMILARITY_THRESHOLD = 0.55;
 export const DATE_BUCKET_HOURS = 24; // events at same venue within same local day are merge candidates
@@ -49,4 +65,8 @@ export const env = {
   places: () => process.env.GOOGLE_PLACES_API_KEY || null,
   databaseUrl: () => process.env.DATABASE_URL || null,
   cronSecret: () => process.env.CRON_SECRET || null,
+  /** True when ANY paid/live stage is configured — the guard for anything that
+   *  must never auto-run billable work (e.g. page-view hydration). */
+  anyLive: () =>
+    Boolean(process.env.APIFY_TOKEN || process.env.OPENAI_API_KEY || process.env.GOOGLE_PLACES_API_KEY),
 };

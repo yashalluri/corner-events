@@ -4,6 +4,7 @@
 
 import { CITY, env } from '../config';
 import { FIXTURE_VENUES } from '../fixtures';
+import { neighborhoodFor } from '../neighborhoods';
 import type { Extraction, Venue } from '../types';
 
 // ─── Date validation (deterministic — the LLM resolved, we verify) ─────────
@@ -74,7 +75,9 @@ async function resolveLive(name: string, address: string | null): Promise<Venue 
     address: p.formattedAddress ?? null,
     lat,
     lng,
-    neighborhood: null,
+    // Derive once at write time (Places doesn't return neighborhoods) so the
+    // read path never recomputes it per request.
+    neighborhood: neighborhoodFor(lat, lng),
   };
 }
 

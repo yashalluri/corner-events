@@ -8,8 +8,9 @@ import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { CITY } from '@/lib/config';
+import { kmBetween } from '@/lib/neighborhoods';
 import type { EventWithVenue } from '@/lib/types';
-import { catEmoji, formatWhen } from '@/lib/ui';
+import { TIER_EMOJI, catEmoji } from '@/lib/ui';
 
 const STYLE_URL = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 
@@ -24,7 +25,9 @@ export default function MapView({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+  // Keyed registry so filter changes DIFF markers instead of rebuilding all of
+  // them — most taps touch a handful of pins, not the whole set.
+  const markersRef = useRef<Map<string, { marker: maplibregl.Marker; sig: string }>>(new Map());
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -53,27 +56,41 @@ export default function MapView({
     map.on('click', () => onSelectRef.current(null));
     mapRef.current = map;
     return () => {
-      map.remove();
+      map.remove(); // removes attached markers too
+      markersRef.current.clear();
       mapRef.current = null;
     };
   }, []);
 
-  // Sync markers with events.
+  // Sync markers with events (diff by event id + content signature).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
-
+    const registry = markersRef.current;
     const mappable = events.filter((e) => e.venue);
+    const nextIds = new Set(mappable.map((e) => e.id));
+
+    // Remove markers whose events left the visible set.
+    for (const [id, entry] of registry) {
+      if (!nextIds.has(id)) {
+        entry.marker.remove();
+        registry.delete(id);
+      }
+    }
+
     for (const e of mappable) {
+      const sig = `${e.tier}|${e.title}|${e.venue!.id}`;
+      const existing = registry.get(e.id);
+      if (existing?.sig === sig) continue; // unchanged — keep the live marker
+      existing?.marker.remove();
+
       const el = document.createElement('div');
       el.className = 'pin';
       const tierClass = e.tier ? ` t-${e.tier}` : '';
       const tierDot =
         e.tier === 'trending'
-          ? `<span class="pin-dot" style="background:var(--trending)">🔥</span>`
+          ? `<span class="pin-dot" style="background:var(--trending)">${TIER_EMOJI.trending}</span>`
           : '';
       el.innerHTML = `
         <div class="pin-inner">
@@ -90,7 +107,7 @@ export default function MapView({
       const marker = new maplibregl.Marker({ element: el, anchor: 'left', offset: [-20, 0] })
         .setLngLat([e.venue!.lng, e.venue!.lat])
         .addTo(map);
-      markersRef.current.push(marker);
+      registry.set(e.id, { marker, sig });
     }
 
     if (mappable.length > 0) {
@@ -101,9 +118,7 @@ export default function MapView({
       const lngs = mappable.map((e) => e.venue!.lng).sort((a, c) => a - c);
       const medLat = lats[Math.floor(lats.length / 2)];
       const medLng = lngs[Math.floor(lngs.length / 2)];
-      const kmDist = (lat: number, lng: number) =>
-        Math.hypot((lat - medLat) * 111, (lng - medLng) * 111 * Math.cos((medLat * Math.PI) / 180));
-      let core = mappable.filter((e) => kmDist(e.venue!.lat, e.venue!.lng) <= 4.5);
+      let core = mappable.filter((e) => kmBetween(medLat, medLng, e.venue!.lat, e.venue!.lng) <= 4.5);
       if (core.length < 2) core = mappable;
       const b = new maplibregl.LngLatBounds();
       core.forEach((e) => b.extend([e.venue!.lng, e.venue!.lat]));

@@ -1,19 +1,13 @@
 // Live-integration smoke test: Supabase, Google Places, Apify (tiny probe).
 // Usage: npx tsx scripts/check-live.ts [--apify]
 
-import { readFileSync } from 'fs';
-for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-  const m = line.match(/^([A-Z_]+)=(.+)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
-
+import './load-env';
 import { getDb } from '../lib/db';
+import { fv, nul } from '../lib/fixtures';
 import { resolveVenue } from '../lib/pipeline/resolve';
+import { apifyInput, apifyRunUrl } from '../lib/pipeline/scrape';
 import { GOLDEN_POST_URLS, env } from '../lib/config';
 import type { Extraction } from '../lib/types';
-
-const fv = (v: string) => ({ value: v, confidence: 0.95, evidence: v });
-const nul = () => ({ value: null, confidence: 0, evidence: null });
 
 async function main() {
   // ── 1. Supabase ──
@@ -29,7 +23,10 @@ async function main() {
 
   // ── 2. Google Places ──
   try {
-    const venue = await resolveVenue({ venueName: fv('Public Records Brooklyn'), address: nul() } as unknown as Extraction);
+    const venue = await resolveVenue({
+      venueName: fv('Public Records Brooklyn', 0.95),
+      address: nul(),
+    } as unknown as Extraction);
     console.log(
       'PLACES    ',
       venue && !venue.id.startsWith('fixture:')
@@ -43,30 +40,23 @@ async function main() {
   }
 
   // ── 3. Apify tiny probe (only with --apify; costs ~$0.01) ──
+  // Uses the SAME run URL + input builder as the real pipeline, so this probe
+  // and production can't drift apart.
   if (process.argv.includes('--apify')) {
     try {
-      const res = await fetch(
-        `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${env.apify()}&timeout=180`,
-        {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            directUrls: [...GOLDEN_POST_URLS, 'https://www.instagram.com/wtfdwg/'],
-            resultsType: 'posts',
-            resultsLimit: 3,
-            addParentData: false,
-          }),
-        },
-      );
+      const res = await fetch(apifyRunUrl(env.apify()!), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(apifyInput([...GOLDEN_POST_URLS, 'https://www.instagram.com/wherethefuckdowego/'], 3)),
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
       const items = (await res.json()) as Record<string, unknown>[];
       console.log(`APIFY     ✓ ${items.length} items returned`);
       for (const it of items.slice(0, 6)) {
         console.log(
-          `   · ${String(it.url ?? '?').slice(0, 60)} | owner=${it.ownerUsername ?? '∅'} | ts=${it.timestamp ?? '∅'} | likes=${it.likesCount ?? '∅'} | type=${it.type ?? '∅'} | caption=${String(it.caption ?? '').slice(0, 60).replace(/\n/g, ' ')}`,
+          `   · ${String(it.url ?? '?').slice(0, 60)} | owner=${it.ownerUsername ?? '∅'} | ts=${it.timestamp ?? '∅'} | likes=${it.likesCount ?? '∅'} | caption=${String(it.caption ?? '').slice(0, 60).replace(/\n/g, ' ')}`,
         );
       }
-      console.log('   field sample keys:', Object.keys(items[0] ?? {}).slice(0, 25).join(','));
     } catch (e) {
       console.log('APIFY     ✗', e instanceof Error ? e.message : e);
     }

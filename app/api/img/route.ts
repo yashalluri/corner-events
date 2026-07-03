@@ -6,10 +6,13 @@
 // so this can't be used as an open proxy.
 
 import { NextResponse } from 'next/server';
+import { IG_CDN_HOST_RE } from '@/lib/config';
 
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_HOSTS = /(^|\.)cdninstagram\.com$|(^|\.)fbcdn\.net$/i;
+// Security allowlist — same canonical host regex the query layer uses to
+// decide proxying, so the two can't drift (client proxies ⊆ server allows).
+const ALLOWED_HOSTS = IG_CDN_HOST_RE;
 
 export async function GET(req: Request) {
   const src = new URL(req.url).searchParams.get('src');

@@ -19,15 +19,12 @@ export default function CoverArt({
   const [broken, setBroken] = useState(false);
 
   if (coverUrl && !broken) {
-    // IG CDN blocks cross-origin <img> renders (CORP headers) — route those
-    // through our same-origin proxy; anything else loads directly.
-    const src = /cdninstagram\.com|fbcdn\.net/i.test(coverUrl)
-      ? `/api/img?src=${encodeURIComponent(coverUrl)}`
-      : coverUrl;
+    // The query layer hands us a presentation-ready URL (IG CDN links arrive
+    // already rewritten through /api/img) — just render it.
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={src}
+        src={coverUrl}
         alt={title}
         loading="lazy"
         referrerPolicy="no-referrer"
