@@ -14,6 +14,8 @@ export interface RawPost {
   commentsCount: number;
   locationName?: string;
   type: 'Image' | 'Video' | 'Sidecar';
+  videoUrl?: string; // reels/videos — the mp4 CDN URL (for transcription + frames)
+  videoDuration?: number; // seconds
   /** Fixture-only: deterministic extraction used when no OPENAI_API_KEY. */
   _mock?: { isEvent: boolean; extraction?: Extraction };
 }

@@ -38,6 +38,14 @@ export const POSTS_PER_ACCOUNT = 12; // recent posts pulled per seed account
 // ── Models (tiered by stage — see PRD §5). Provider: OpenAI (product decision) ──
 export const GATE_MODEL = 'gpt-4o-mini'; // cheap binary classifier, runs on everything
 export const EXTRACT_MODEL = 'gpt-4o'; // vision+structured extraction, runs on gated posts
+export const TRANSCRIBE_MODEL = 'gpt-4o-transcribe'; // reel audio → text (accuracy over cost)
+
+// ── Reels / video ──
+export const FRAME_COUNT = 4; // interior frames sampled per reel (ffmpeg, local)
+export const MAX_VIDEO_BYTES = 24 * 1024 * 1024; // skip transcription above Whisper's ~25MB cap
+
+// ── Trust: below this overall confidence, an event is HELD off the map (needs_review) ──
+export const PUBLISH_CONFIDENCE = 0.6;
 
 /** Canonical event-category vocabulary — single source of truth for the
  *  extraction schema, the normalizer, and the UI emoji map. */

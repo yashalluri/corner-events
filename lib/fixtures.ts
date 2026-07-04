@@ -493,6 +493,36 @@ export function getFixturePosts(): RawPost[] {
         }),
       },
     },
+    // ── REEL: thin emoji caption; the event info lives in the (mock) audio.
+    //    Demonstrates video handling in keyless mode — a caption-only gate would
+    //    drop this, but the reel path recovers it.
+    {
+      id: 'gallerina-reel-openstudios',
+      shortCode: 'Reel1',
+      url: 'https://www.instagram.com/reel/Reel1/',
+      caption: '🎨🍷🔊 sunday. tag who you’re bringing 👀',
+      displayUrl: '',
+      timestamp: ago(7),
+      ownerUsername: 'thirstygallerina',
+      likesCount: 380,
+      commentsCount: 52,
+      locationName: 'Canal Street Market',
+      type: 'Video',
+      videoUrl: 'https://fixture.local/reel1.mp4', // fixture-only sentinel
+      videoDuration: 31,
+      _mock: {
+        isEvent: true,
+        extraction: extraction({
+          title: 'Open Studios + Natural Wine',
+          venue: 'Canal Street Market',
+          start: nextDay(0, 15),
+          end: nextDay(0, 19),
+          desc: 'Twelve artists open their studios; natural wine and a DJ upstairs.',
+          cost: 'free',
+          category: 'art',
+        }),
+      },
+    },
     // ── NON-EVENTS: the gate must drop both.
     {
       id: 'locals-meme',

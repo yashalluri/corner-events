@@ -45,9 +45,11 @@ ticks stay small because watermarks only admit new posts.
 │  B  GATE        gpt-4o-mini — "is this even an event?"        │
 │                 drops memes/listicles BEFORE paying for vision│
 │  C  EXTRACT     gpt-4o — caption+flyer → fields, per-field    │
-│                 confidence + evidence, null-beats-a-guess     │
-│  D  RESOLVE     deterministic date validation (vs post ts,    │
-│                 America/New_York) + Google Places → lat/lng   │
+│                 confidence + evidence, null-beats-a-guess.    │
+│                 REELS: + gpt-4o-transcribe audio + ffmpeg     │
+│                 frames → spoken/on-screen details are read    │
+│  D  RESOLVE     deterministic date + field validators, then   │
+│                 Google Places → lat/lng + neighborhood.       │
 │                 hold-don't-drop: unresolved venue = kept,     │
 │                 off-map (needs_review)                        │
 │  E  IDENTITY    atomic upsert: surrogate event_id (UUID) +    │
@@ -83,6 +85,17 @@ ticks stay small because watermarks only admit new posts.
 - **Ephemerality:** event status (upcoming/live/past) is computed at query time — there's
   no status column to drift and nothing for the cron to flip. Past events just stop
   being returned.
+- **Reels are multimodal, not just cover images:** a reel's event info often lives in the
+  voiceover or on a flyer frame, so every video gets caption + cover + `gpt-4o-transcribe`
+  audio + ffmpeg-sampled frames, all fed to one extraction call. The gate also sees the
+  transcript, so an emoji-caption reel isn't wrongly dropped. Frames are local-only
+  (`brew install ffmpeg`); the serverless cron degrades to caption+cover+audio.
+- **Trust > extraction rate:** we don't claim 100% extraction — we publish only what's
+  trustworthy. A **publish-gate** holds any event below `PUBLISH_CONFIDENCE` (or with no
+  resolved venue/date) off the map; **deterministic validators** null out implausible
+  venue/price/age/capacity (an ad-copy "venue" or a `$99999` price); **cross-source
+  agreement** bumps confidence when independent posts corroborate. Measured on a frozen
+  labeled set (`npm run eval`): gate **F1 95%**, date extraction **100%**, venue **89%**.
 
 ### The golden acceptance test
 

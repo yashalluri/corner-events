@@ -20,6 +20,38 @@ export function validateDates(x: Extraction): { ok: boolean; reason?: string } {
   return { ok: true };
 }
 
+/** Deterministic field sanity — structural catches for confident-but-wrong
+ *  LLM values. Mutates a field to null when its format is implausible so a
+ *  hallucinated "$99999" or "500+" age never reaches the UI. */
+export function scrubImplausibleFields(x: Extraction): void {
+  // Venue: a real place name is short. Sentence-like / ad-copy strings ("New
+  // Years in NYC?! Luxury stay...") are on-screen-text the model mistook for a
+  // venue — null them so the event is held, not resolved to a bogus pin.
+  if (x.venueName.value) {
+    const v = x.venueName.value.trim();
+    if (v.length > 45 || /[?!]/.test(v) || v.split(/\s+/).length > 7) {
+      x.venueName = { value: null, confidence: 0, evidence: null };
+    }
+  }
+  // Price: keep "free" or something containing a $-amount under ~$100k.
+  if (x.cost.value) {
+    const v = x.cost.value;
+    const amount = Number(v.replace(/[^0-9.]/g, ''));
+    if (!/free/i.test(v) && (!/\d/.test(v) || amount > 100000)) {
+      x.cost = { value: null, confidence: 0, evidence: null };
+    }
+  }
+  // Age: plausible IG age gates only.
+  if (x.ageLimit.value && !/^(all ages|18\+|19\+|21\+|18 and over|21 and over)$/i.test(x.ageLimit.value.trim())) {
+    const n = Number(x.ageLimit.value.replace(/[^0-9]/g, ''));
+    x.ageLimit = n >= 15 && n <= 25 ? { ...x.ageLimit, value: `${n}+` } : { value: null, confidence: 0, evidence: null };
+  }
+  // Capacity: a real room, not a hallucinated crowd.
+  if (x.capacity.value != null && (x.capacity.value <= 0 || x.capacity.value > 100000)) {
+    x.capacity = { value: null, confidence: 0, evidence: null };
+  }
+}
+
 // ─── Venue resolution ───────────────────────────────────────────────────────
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();

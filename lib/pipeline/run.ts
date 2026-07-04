@@ -12,9 +12,11 @@ import { getDb } from '../db';
 import type { PipelineStats } from '../types';
 import { applyWatermarks, scrape } from './scrape';
 import { eventGate, extract, llmMode } from './llm';
-import { placesMode, resolveVenue, validateDates } from './resolve';
+import { placesMode, resolveVenue, scrubImplausibleFields, validateDates } from './resolve';
 import { upsertEvent } from './dedup';
 import { recomputeTiers } from './tiers';
+import { transcribeVideo } from './transcribe';
+import { sampleFrames } from './frames';
 
 export async function runPipeline(): Promise<PipelineStats> {
   const db = await getDb();
@@ -49,10 +51,13 @@ export async function runPipeline(): Promise<PipelineStats> {
   // 3. Store raw posts (idempotent; enables re-extraction without re-scraping).
   for (const p of fresh) {
     await db.query(
-      `INSERT INTO posts (id, short_code, url, owner_username, caption, display_url, posted_at, likes, comments)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8,$9)
-       ON CONFLICT (id) DO UPDATE SET likes = EXCLUDED.likes, comments = EXCLUDED.comments`,
-      [p.id, p.shortCode, p.url, p.ownerUsername, p.caption, p.displayUrl || null, p.timestamp, p.likesCount, p.commentsCount],
+      `INSERT INTO posts (id, short_code, url, owner_username, caption, display_url, video_url, posted_at, likes, comments)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::timestamptz,$9,$10)
+       ON CONFLICT (id) DO UPDATE SET
+         likes = EXCLUDED.likes,
+         comments = EXCLUDED.comments,
+         video_url = COALESCE(posts.video_url, EXCLUDED.video_url)`,
+      [p.id, p.shortCode, p.url, p.ownerUsername, p.caption, p.displayUrl || null, p.videoUrl || null, p.timestamp, p.likesCount, p.commentsCount],
     );
     // Unknown accounts (e.g. golden-post authors) still need a sources row for baselines.
     await db.query(`INSERT INTO sources (username, authority) VALUES ($1, 0.5) ON CONFLICT DO NOTHING`, [p.ownerUsername]);
@@ -70,19 +75,35 @@ export async function runPipeline(): Promise<PipelineStats> {
 
       if (llmCalls >= MAX_LLM_CALLS_PER_TICK) { stats.errors.push('LLM budget reached — remaining posts deferred to next tick'); break; }
 
+      // Videos: gather the full signal set BEFORE gating (a reel's caption is
+      // often just an emoji — its real content is spoken or on-screen).
+      let transcript: string | null = null;
+      let frames: string[] | null = null;
+      let videoTag = '';
+      if (post.videoUrl) {
+        const cached = await db.query<{ transcript: string | null }>(`SELECT transcript FROM posts WHERE id=$1`, [post.id]);
+        transcript = cached[0]?.transcript ?? (await transcribeVideo(post.videoUrl));
+        if (transcript && !cached[0]?.transcript) {
+          await db.query(`UPDATE posts SET transcript=$2 WHERE id=$1`, [post.id, transcript]);
+        }
+        frames = await sampleFrames(post.videoUrl);
+        videoTag = ` transcript:${transcript ? '✓' : '✗'} frames:${frames?.length ?? 0}`;
+      }
+
       llmCalls++;
-      const isEvent = await eventGate(post);
+      const isEvent = await eventGate(post, transcript);
       await db.query(`UPDATE posts SET is_event=$2 WHERE id=$1`, [post.id, isEvent]);
       if (!isEvent) {
         stats.gated_out++;
         await db.query(`UPDATE posts SET processed=true WHERE id=$1`, [post.id]);
-        log(post, 'gate:✗ not an event');
+        log(post, `gate:✗ not an event${videoTag}`);
         continue;
       }
 
       llmCalls++;
-      const extraction = await extract(post);
-      if (!extraction) { stats.errors.push(`${post.id}: no extraction available`); log(post, 'gate:✓ extract:✗'); continue; }
+      const extraction = await extract(post, { transcript, frames });
+      if (!extraction) { stats.errors.push(`${post.id}: no extraction available`); log(post, `gate:✓ extract:✗${videoTag}`); continue; }
+      scrubImplausibleFields(extraction); // deterministic anti-hallucination on cost/age/capacity
       stats.extracted++;
 
       const dates = validateDates(extraction);
@@ -110,7 +131,7 @@ export async function runPipeline(): Promise<PipelineStats> {
       else stats.skipped_duplicates++;
 
       await db.query(`UPDATE posts SET processed=true WHERE id=$1`, [post.id]);
-      log(post, `gate:✓ extract:✓ venue:${venue ? '✓ ' + venue.name : '✗ needs_review'} → ${result.action} "${title.slice(0, 40)}"`);
+      log(post, `gate:✓ extract:✓${videoTag} venue:${venue ? '✓ ' + venue.name : '✗ needs_review'} → ${result.action} "${title.slice(0, 40)}"`);
     } catch (e) {
       stats.errors.push(`${post.id}: ${e instanceof Error ? e.message : String(e)}`);
       log(post, `ERROR: ${e instanceof Error ? e.message.slice(0, 80) : String(e).slice(0, 80)}`);

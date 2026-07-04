@@ -89,7 +89,12 @@ export async function upsertEvent(
        ON CONFLICT DO NOTHING RETURNING event_id`,
       [match.id, post.id],
     );
-    const conf = overallConfidence(x);
+    // Cross-source agreement: a match already means two independent posts agree
+    // on venue + local-day + title (that's the signature). Independent
+    // corroboration → a confidence bonus, which can lift a borderline event
+    // over the publish threshold. Only on a genuinely new source.
+    const isNewSource = attach.length > 0;
+    const conf = Math.min(1, overallConfidence(x) + (isNewSource ? 0.15 : 0));
     await db.query(
       `UPDATE events SET
          description   = COALESCE(description, $2),
@@ -99,7 +104,7 @@ export async function upsertEvent(
          capacity      = COALESCE(capacity, $6),
          external_link = COALESCE(external_link, $7),
          cover_url     = COALESCE(cover_url, $8),
-         confidence    = GREATEST(confidence, $9),
+         confidence    = LEAST(1, GREATEST(confidence, $9) + $10),
          updated_at    = now()
        WHERE id = $1`,
       [
@@ -112,9 +117,10 @@ export async function upsertEvent(
         x.externalLink.value,
         post.displayUrl || null,
         conf,
+        isNewSource ? 0.1 : 0, // extra corroboration bump on the stored score
       ],
     );
-    return { action: attach.length > 0 ? 'merged' : 'skipped', eventId: match.id };
+    return { action: isNewSource ? 'merged' : 'skipped', eventId: match.id };
   }
 
   // 3b. New event: mint surrogate id.

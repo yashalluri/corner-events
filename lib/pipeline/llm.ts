@@ -28,11 +28,13 @@ function gateHeuristic(post: RawPost): boolean {
   return EVENT_HINTS.test(post.caption);
 }
 
-export async function eventGate(post: RawPost): Promise<boolean> {
+export async function eventGate(post: RawPost, transcript?: string | null): Promise<boolean> {
   if (!env.openai()) {
     if (post._mock) return post._mock.isEvent;
-    return gateHeuristic(post);
+    return gateHeuristic(post) || Boolean(transcript && EVENT_HINTS.test(transcript));
   }
+  // For a reel, the caption is often just an emoji — judge on the spoken audio too.
+  const audio = transcript ? `\n\nSPOKEN AUDIO (video):\n"""${transcript.slice(0, 1500)}"""` : '';
   const res = await openai().chat.completions.create({
     model: GATE_MODEL,
     max_tokens: 200,
@@ -55,7 +57,7 @@ export async function eventGate(post: RawPost): Promise<boolean> {
         content:
           `You classify Instagram posts. An EVENT is a specific real-world happening people can attend: pop-up, dinner, show, party, market, class, gallery opening — AND time-bounded commercial happenings like sample sales, archive sales, limited-run collabs, or "X returns to Y" announcements. A relative or implied timeframe ("this weekend", "returns", "one week only", "now through Sunday") counts as a date. ` +
           `NOT events: memes, listicles ("best bagels"), permanent-place recommendations, generic menu promos with no time bound, giveaways, recaps of past events with no upcoming date. When genuinely ambiguous, lean is_event=true — a later stage validates dates and can drop it.\n\n` +
-          `Caption (posted ${post.timestamp} by @${post.ownerUsername}):\n"""${post.caption.slice(0, 1500)}"""`,
+          `Caption (posted ${post.timestamp} by @${post.ownerUsername}):\n"""${post.caption.slice(0, 1500)}"""${audio}`,
       },
     ],
   });
@@ -113,27 +115,45 @@ const EXTRACTION_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-export async function extract(post: RawPost): Promise<Extraction | null> {
+export interface ExtractSignals {
+  transcript?: string | null; // reel spoken audio
+  frames?: string[] | null; // reel interior frames (data URLs)
+}
+
+export async function extract(post: RawPost, signals: ExtractSignals = {}): Promise<Extraction | null> {
   if (!env.openai()) {
     // Fixture mode: only fixture posts carry a mock extraction. A non-fixture
     // post without a key is held rather than guessed at.
     return post._mock?.extraction ?? null;
   }
 
+  const isVideo = Boolean(post.videoUrl);
+  const sources = isVideo
+    ? 'A reel/video: the written caption, the cover + interior video FRAMES (read on-screen/flyer text), and the SPOKEN AUDIO transcript. Different reels put the details in different places — cross-reference all of them.'
+    : 'A post: the written caption and the flyer/cover image.';
+  const audio = signals.transcript
+    ? `\n\nSPOKEN AUDIO TRANSCRIPT (narration of the video):\n"""${signals.transcript.slice(0, 3000)}"""`
+    : '';
+
   const prompt =
-    `Extract structured event data from this Instagram post (caption + flyer image if attached).\n\n` +
+    `Extract structured event data from this Instagram ${isVideo ? 'reel' : 'post'}. ${sources}\n\n` +
     `RULES — read carefully:\n` +
-    `• Per field, return {value, confidence (0-1), evidence}. evidence = the exact caption span or flyer text the value came from.\n` +
-    `• null beats a guess. If a field is not stated, value=null, confidence=0. NEVER invent capacity, price, or age limits.\n` +
+    `• Per field, return {value, confidence (0-1), evidence}. evidence = the exact caption span, on-screen frame text, or spoken line the value came from.\n` +
+    `• null beats a guess. If a field is not stated anywhere, value=null, confidence=0. NEVER invent capacity, price, or age limits.\n` +
     `• Resolve relative dates ("tonight", "this Friday") against the post's publish time: ${post.timestamp}, timezone ${CITY.timezone}. Return ISO 8601 with offset.\n` +
     `• category ∈ food | music | art | nightlife | market | fitness | comedy | other.\n` +
     `• venueName: the place hosting it${post.locationName ? ` (post location tag: "${post.locationName}")` : ''}.\n\n` +
-    `Caption by @${post.ownerUsername}:\n"""${post.caption.slice(0, 3000)}"""`;
+    `Caption by @${post.ownerUsername}:\n"""${post.caption.slice(0, 3000)}"""${audio}`;
 
-  const call = async (withImage: boolean) => {
+  const call = async (withImages: boolean) => {
     const content: OpenAI.Chat.ChatCompletionContentPart[] = [];
-    if (withImage && post.displayUrl?.startsWith('https://')) {
-      content.push({ type: 'image_url', image_url: { url: post.displayUrl, detail: 'low' } });
+    if (withImages) {
+      if (post.displayUrl?.startsWith('https://')) {
+        content.push({ type: 'image_url', image_url: { url: post.displayUrl, detail: 'low' } });
+      }
+      for (const frame of signals.frames ?? []) {
+        content.push({ type: 'image_url', image_url: { url: frame, detail: 'low' } });
+      }
     }
     content.push({ type: 'text', text: prompt });
     return openai().chat.completions.create({
@@ -204,8 +224,10 @@ function sanitizeExtraction(x: Extraction): Extraction {
   return out;
 }
 
-/** Overall event confidence = min of the load-bearing fields. */
+/** Publish-trustworthiness = do we trust WHERE and WHEN. Title is excluded on
+ *  purpose — it's synthesized when missing (dedup.ts), so an uncertain title
+ *  must not hold an event whose venue and date are solid. */
 export function overallConfidence(x: Extraction): number {
-  const loadBearing: FieldValue<unknown>[] = [x.title, x.venueName, x.startDatetime];
-  return Math.min(...loadBearing.map((f) => (f.value != null ? f.confidence : 0)));
+  const critical: FieldValue<unknown>[] = [x.venueName, x.startDatetime];
+  return Math.min(...critical.map((f) => (f.value != null ? f.confidence : 0)));
 }

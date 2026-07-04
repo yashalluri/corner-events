@@ -31,6 +31,8 @@ interface ApifyItem {
   commentsCount?: number;
   locationName?: string;
   type?: string;
+  videoUrl?: string;
+  videoDuration?: number;
 }
 
 function normalize(item: ApifyItem): RawPost | null {
@@ -52,6 +54,8 @@ function normalize(item: ApifyItem): RawPost | null {
     commentsCount: comments,
     locationName: item.locationName,
     type: (item.type as RawPost['type']) ?? 'Image',
+    videoUrl: item.videoUrl,
+    videoDuration: item.videoDuration,
   };
 }
 

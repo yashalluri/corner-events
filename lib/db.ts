@@ -26,12 +26,17 @@ CREATE TABLE IF NOT EXISTS posts (               -- raw scrape payloads (re-extr
   owner_username TEXT NOT NULL,
   caption TEXT,
   display_url TEXT,
+  video_url TEXT,                     -- reels: mp4 CDN url
+  transcript TEXT,                    -- cached audio transcription (re-runs don't re-transcribe)
   posted_at TIMESTAMPTZ NOT NULL,
   likes INTEGER NOT NULL DEFAULT 0,
   comments INTEGER NOT NULL DEFAULT 0,
   is_event BOOLEAN,                   -- event-gate verdict (NULL = not yet gated)
   processed BOOLEAN NOT NULL DEFAULT FALSE
 );
+-- Older DBs created before reels support: add columns if missing.
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS video_url TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS transcript TEXT;
 
 CREATE TABLE IF NOT EXISTS venues (
   id TEXT PRIMARY KEY,                -- google place_id (or fixture:slug)
