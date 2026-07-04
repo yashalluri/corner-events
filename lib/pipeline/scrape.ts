@@ -2,7 +2,7 @@
 // Watermarks make autonomous re-runs cheap: we only keep posts newer than the
 // last processed timestamp per account (golden posts are always kept).
 
-import { env, POSTS_PER_ACCOUNT, SEED_ACCOUNTS } from '../config';
+import { env, POSTS_PER_ACCOUNT, SCRAPE_SINCE, SEED_ACCOUNTS } from '../config';
 import { getFixturePosts } from '../fixtures';
 import type { RawPost } from '../types';
 
@@ -16,6 +16,7 @@ export const apifyInput = (directUrls: string[], resultsLimit: number) => ({
   directUrls,
   resultsType: 'posts' as const,
   resultsLimit,
+  onlyPostsNewerThan: SCRAPE_SINCE, // capture everything recent, not just newest N
   addParentData: false,
 });
 

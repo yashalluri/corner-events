@@ -175,6 +175,9 @@ export default function CornerApp() {
                   {selected.cost ? ` · ${formatCost(selected.cost)}` : ''}
                   {selected.age_limit ? ` · ${selected.age_limit}` : ''}
                 </div>
+                {selected.unverified && (
+                  <div className="detail-unverified">⚠ unverified — auto-detected, details may be off</div>
+                )}
                 {selected.tier && selected.tier_reason && (
                   <div className={`detail-reason t-${selected.tier}`}>
                     {TIER_EMOJI[selected.tier]} {selected.tier_reason}
@@ -214,6 +217,7 @@ export default function CornerApp() {
                       <div className="ecard-cover">
                         <CoverArt title={e.title} category={e.category} coverUrl={e.cover_url} />
                         {e.tier && <span className={`ecard-tier t-${e.tier}`}>{e.tier}</span>}
+                        {e.unverified && <span className="ecard-unverified">unverified</span>}
                         <span className="ecard-ig" aria-hidden>↗</span>
                       </div>
                       <div className="ecard-title">{e.title}</div>

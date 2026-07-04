@@ -13,8 +13,8 @@ export function validateDates(x: Extraction): { ok: boolean; reason?: string } {
   const start = x.startDatetime.value ? new Date(x.startDatetime.value) : null;
   if (!start || isNaN(start.getTime())) return { ok: false, reason: 'no valid start date' };
   const now = Date.now();
-  const sixMonths = 183 * 24 * 3600_000;
-  if (start.getTime() > now + sixMonths) return { ok: false, reason: 'start >6 months out — likely misresolved' };
+  const twelveMonths = 365 * 24 * 3600_000;
+  if (start.getTime() > now + twelveMonths) return { ok: false, reason: 'start >12 months out — likely misresolved' };
   // Past events are valid data (lifecycle hides them); only reject absurdly old.
   if (start.getTime() < now - 90 * 24 * 3600_000) return { ok: false, reason: 'start >90 days past' };
   return { ok: true };

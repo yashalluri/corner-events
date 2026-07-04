@@ -80,14 +80,14 @@ export default function MapView({
     }
 
     for (const e of mappable) {
-      const sig = `${e.tier}|${e.title}|${e.venue!.id}`;
+      const sig = `${e.tier}|${e.title}|${e.venue!.id}|${e.unverified}`;
       const existing = registry.get(e.id);
       if (existing?.sig === sig) continue; // unchanged — keep the live marker
       existing?.marker.remove();
 
       const el = document.createElement('div');
       el.className = 'pin';
-      const tierClass = e.tier ? ` t-${e.tier}` : '';
+      const tierClass = (e.tier ? ` t-${e.tier}` : '') + (e.unverified ? ' unverified' : '');
       const tierDot =
         e.tier === 'trending'
           ? `<span class="pin-dot" style="background:var(--trending)">${TIER_EMOJI.trending}</span>`

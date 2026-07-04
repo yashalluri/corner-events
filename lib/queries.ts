@@ -24,15 +24,11 @@ async function ensureHydrated(): Promise<void> {
   return hydrating;
 }
 
-function statusOf(
-  startAt: string | null,
-  endAt: string | null,
-  venueId: string | null,
-  confidence: number,
-): EventStatus {
-  // Publish-gate: anything unresolved OR low-confidence is HELD off the map.
-  // This is what makes "everything published is trustworthy" literally true.
-  if (!venueId || !startAt || confidence < PUBLISH_CONFIDENCE) return 'needs_review';
+function statusOf(startAt: string | null, endAt: string | null, venueId: string | null): EventStatus {
+  // Hold off-map only on DETERMINISTIC failures (no resolved venue / no date).
+  // Low-confidence events still show — they wear an "unverified" badge instead
+  // of being hidden, so we maximize recall without lying about certainty.
+  if (!venueId || !startAt) return 'needs_review';
   const now = Date.now();
   const start = new Date(startAt).getTime();
   const end = endAt ? new Date(endAt).getTime() : start + 4 * 3600_000; // default 4h duration
@@ -91,7 +87,8 @@ export async function listEvents(opts?: { includePast?: boolean }): Promise<Even
     tier: (r.tier as EventWithVenue['tier']) ?? null, tier_reason: r.tier_reason,
     popular_score: r.popular_score, heat_score: r.heat_score,
     created_at: r.created_at, updated_at: r.updated_at,
-    status: statusOf(r.start_at, r.end_at, r.venue_id, r.confidence),
+    status: statusOf(r.start_at, r.end_at, r.venue_id),
+    unverified: r.confidence < PUBLISH_CONFIDENCE, // shows on map, but badged
     venue: r.v_lat != null && r.v_lng != null
       ? {
           id: r.venue_id!,

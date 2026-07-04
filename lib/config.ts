@@ -30,10 +30,13 @@ export const GOLDEN_POST_URLS = [
   'https://www.instagram.com/p/DZ-UjDXEZNC/',
 ];
 
-// ── Cost guards for the autonomous trigger ──
-export const MAX_POSTS_PER_TICK = 60; // hard cap on posts entering the pipeline per cron run
-export const MAX_LLM_CALLS_PER_TICK = 100; // gate + extract combined
-export const POSTS_PER_ACCOUNT = 12; // recent posts pulled per seed account
+// ── Coverage / recall (cost is no object — bias toward not missing events) ──
+export const POSTS_PER_ACCOUNT = 50; // grid depth per account (was 12)
+export const SCRAPE_SINCE = '3 months'; // pull everything posted in this window
+// Per-tick safety ceiling. Env-tunable so a deploy can keep the serverless cron
+// small (watermarks make steady-state ticks tiny anyway); local backfill goes deep.
+export const MAX_POSTS_PER_TICK = Number(process.env.INGEST_MAX_POSTS) || 500;
+export const MAX_LLM_CALLS_PER_TICK = 2000; // real bound is MAX_POSTS_PER_TICK
 
 // ── Models (tiered by stage — see PRD §5). Provider: OpenAI (product decision) ──
 export const GATE_MODEL = 'gpt-4o-mini'; // cheap binary classifier, runs on everything
@@ -44,7 +47,8 @@ export const TRANSCRIBE_MODEL = 'gpt-4o-transcribe'; // reel audio → text (acc
 export const FRAME_COUNT = 4; // interior frames sampled per reel (ffmpeg, local)
 export const MAX_VIDEO_BYTES = 24 * 1024 * 1024; // skip transcription above Whisper's ~25MB cap
 
-// ── Trust: below this overall confidence, an event is HELD off the map (needs_review) ──
+// ── Trust: at/above this venue+date confidence an event reads as verified;
+//    below it, it still SHOWS on the map but wears an "unverified" badge. ──
 export const PUBLISH_CONFIDENCE = 0.6;
 
 /** Canonical event-category vocabulary — single source of truth for the

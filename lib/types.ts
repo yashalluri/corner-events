@@ -82,6 +82,7 @@ export interface EventRow {
 export interface EventWithVenue extends EventRow {
   venue: Venue | null;
   status: EventStatus;
+  unverified: boolean; // venue+date resolved but low confidence → show, but badge it
   sources: { username: string; url: string; likes: number; comments: number; postedAt: string }[];
 }
 
