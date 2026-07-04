@@ -29,6 +29,7 @@ async function main() {
   console.log(`\n── eval (llm: ${llmMode()}) · ${EVAL_SET.length} cases ──\n`);
   let tp = 0, fp = 0, fn = 0, tn = 0;
   let dateOk = 0, dateTotal = 0, venueOk = 0, venueTotal = 0;
+  let multiOk = 0, multiTotal = 0;
   const misses: string[] = [];
 
   for (const c of EVAL_SET) {
@@ -42,7 +43,13 @@ async function main() {
 
     // Extraction quality — only for true events the gate let through.
     if (c.expect.isEvent && gated) {
-      const x = await extract(post, { transcript: c.transcript ?? null });
+      const xs = await extract(post, { transcript: c.transcript ?? null });
+      if (c.expect.minEvents) {
+        multiTotal++;
+        if (xs.length >= c.expect.minEvents) multiOk++;
+        else misses.push(`MULTI    ${c.id}: expected ≥${c.expect.minEvents} events, got ${xs.length}`);
+      }
+      const x = xs[0];
       if (x) {
         scrubImplausibleFields(x);
         if (c.expect.hasDate) {
@@ -72,6 +79,7 @@ async function main() {
   console.log('EXTRACTION (on gated-in events)');
   console.log(`  valid date:   ${pct(dateOk, dateTotal)}`);
   console.log(`  venue match:  ${pct(venueOk, venueTotal)}`);
+  console.log(`  multi-split:  ${pct(multiOk, multiTotal)}`);
   if (misses.length) {
     console.log('\nMISSES');
     for (const m of misses) console.log('  ' + m);

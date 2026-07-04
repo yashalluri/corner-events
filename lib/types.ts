@@ -16,8 +16,9 @@ export interface RawPost {
   type: 'Image' | 'Video' | 'Sidecar';
   videoUrl?: string; // reels/videos — the mp4 CDN URL (for transcription + frames)
   videoDuration?: number; // seconds
-  /** Fixture-only: deterministic extraction used when no OPENAI_API_KEY. */
-  _mock?: { isEvent: boolean; extraction?: Extraction };
+  slideUrls?: string[]; // carousel slides 2..N (slide 1 is displayUrl)
+  /** Fixture-only: deterministic extraction(s) used when no OPENAI_API_KEY. */
+  _mock?: { isEvent: boolean; extraction?: Extraction; extractions?: Extraction[] };
 }
 
 // ─── Extraction layer ───────────────────────────────────────────────────────
@@ -41,6 +42,9 @@ export interface Extraction {
   cost: FieldValue<string>; // "$27", "free", "from $50"
   category: FieldValue<string>; // food | music | art | nightlife | market | fitness | comedy | other
   externalLink: FieldValue<string>;
+  /** Which provided image represents this event: 0 = cover, 1..N = carousel
+   *  slides. Lets each roundup event carry its own slide as its card cover. */
+  coverSlideIndex?: number | null;
 }
 
 // ─── Store layer ────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@
 // so the pipeline still runs end-to-end.
 
 import OpenAI from 'openai';
-import { CATEGORIES, CITY, EXTRACT_MODEL, GATE_MODEL, env } from '../config';
+import { CATEGORIES, CITY, EXTRACT_MODEL, GATE_MODEL, MAX_EVENTS_PER_POST, env } from '../config';
 import type { Extraction, FieldValue, RawPost } from '../types';
 
 let client: OpenAI | null = null;
@@ -56,7 +56,8 @@ export async function eventGate(post: RawPost, transcript?: string | null): Prom
         role: 'user',
         content:
           `You classify Instagram posts. An EVENT is a specific real-world happening people can attend: pop-up, dinner, show, party, market, class, gallery opening — AND time-bounded commercial happenings like sample sales, archive sales, limited-run collabs, or "X returns to Y" announcements. A relative or implied timeframe ("this weekend", "returns", "one week only", "now through Sunday") counts as a date. ` +
-          `NOT events: memes, listicles ("best bagels"), permanent-place recommendations, generic menu promos with no time bound, giveaways, recaps of past events with no upcoming date. When genuinely ambiguous, lean is_event=true — a later stage validates dates and can drop it.\n\n` +
+          `Roundups/guides listing multiple DATED events ("10 things to do this weekend") ARE events — they get split into individual events downstream. ` +
+          `NOT events: memes, listicles of PLACES with no dates ("best bagels in nyc"), permanent-place recommendations, generic menu promos with no time bound, giveaways, recaps of past events with no upcoming date. When genuinely ambiguous, lean is_event=true — a later stage validates dates and can drop it.\n\n` +
           `Caption (posted ${post.timestamp} by @${post.ownerUsername}):\n"""${post.caption.slice(0, 1500)}"""${audio}`,
       },
     ],
@@ -92,7 +93,7 @@ const CATEGORY_FIELD_SCHEMA = {
   },
 } as const;
 
-const EXTRACTION_SCHEMA = {
+const EVENT_SCHEMA = {
   type: 'object',
   properties: {
     title: FIELD_SCHEMA,
@@ -107,11 +108,23 @@ const EXTRACTION_SCHEMA = {
     cost: FIELD_SCHEMA,
     category: CATEGORY_FIELD_SCHEMA,
     externalLink: FIELD_SCHEMA,
+    // Which provided image best represents THIS event (0 = cover, 1..N = slides
+    // in order). Lets each roundup event carry its own slide as its card cover.
+    coverSlideIndex: { type: ['number', 'null'] },
   },
   required: [
     'title', 'venueName', 'address', 'description', 'startDatetime', 'endDatetime',
-    'rsvpDeadline', 'capacity', 'ageLimit', 'cost', 'category', 'externalLink',
+    'rsvpDeadline', 'capacity', 'ageLimit', 'cost', 'category', 'externalLink', 'coverSlideIndex',
   ],
+  additionalProperties: false,
+} as const;
+
+// A post may contain MULTIPLE events (roundup carousels, "top 5" reels) — the
+// schema is an array; singles come back as a one-element list.
+const MULTI_EXTRACTION_SCHEMA = {
+  type: 'object',
+  properties: { events: { type: 'array', items: EVENT_SCHEMA } },
+  required: ['events'],
   additionalProperties: false,
 } as const;
 
@@ -120,29 +133,37 @@ export interface ExtractSignals {
   frames?: string[] | null; // reel interior frames (data URLs)
 }
 
-export async function extract(post: RawPost, signals: ExtractSignals = {}): Promise<Extraction | null> {
+/** Extract 1..N events from a post (roundup carousels and "top 5" reels yield
+ *  several; ordinary posts yield one). */
+export async function extract(post: RawPost, signals: ExtractSignals = {}): Promise<Extraction[]> {
   if (!env.openai()) {
-    // Fixture mode: only fixture posts carry a mock extraction. A non-fixture
+    // Fixture mode: only fixture posts carry mock extractions. A non-fixture
     // post without a key is held rather than guessed at.
-    return post._mock?.extraction ?? null;
+    if (post._mock?.extractions) return post._mock.extractions;
+    return post._mock?.extraction ? [post._mock.extraction] : [];
   }
 
   const isVideo = Boolean(post.videoUrl);
+  const slides = post.slideUrls ?? [];
   const sources = isVideo
     ? 'A reel/video: the written caption, the cover + interior video FRAMES (read on-screen/flyer text), and the SPOKEN AUDIO transcript. Different reels put the details in different places — cross-reference all of them.'
-    : 'A post: the written caption and the flyer/cover image.';
+    : slides.length
+      ? `A carousel with ${slides.length + 1} slides: the caption plus every slide image (roundups often put one event per slide).`
+      : 'A post: the written caption and the flyer/cover image.';
   const audio = signals.transcript
     ? `\n\nSPOKEN AUDIO TRANSCRIPT (narration of the video):\n"""${signals.transcript.slice(0, 3000)}"""`
     : '';
 
   const prompt =
     `Extract structured event data from this Instagram ${isVideo ? 'reel' : 'post'}. ${sources}\n\n` +
+    `A post may contain MULTIPLE distinct events (roundup carousels, "top N this weekend" reels). Return one entry per distinct dated event — do NOT merge different events into one, and do NOT pad a single event into a list.\n\n` +
     `RULES — read carefully:\n` +
-    `• Per field, return {value, confidence (0-1), evidence}. evidence = the exact caption span, on-screen frame text, or spoken line the value came from.\n` +
+    `• Per field, return {value, confidence (0-1), evidence}. evidence = the exact caption span, slide text, or spoken line the value came from.\n` +
     `• null beats a guess. If a field is not stated anywhere, value=null, confidence=0. NEVER invent capacity, price, or age limits.\n` +
     `• Resolve relative dates ("tonight", "this Friday") against the post's publish time: ${post.timestamp}, timezone ${CITY.timezone}. Return ISO 8601 with offset.\n` +
     `• category ∈ food | music | art | nightlife | market | fitness | comedy | other.\n` +
-    `• venueName: the place hosting it${post.locationName ? ` (post location tag: "${post.locationName}")` : ''}.\n\n` +
+    `• venueName: the place hosting THAT event${post.locationName ? ` (post location tag: "${post.locationName}")` : ''}.\n` +
+    `• coverSlideIndex: which provided image best represents THAT event — 0 = the cover image, 1..${slides.length} = carousel slides in order. Video frames (if any, provided after the slides) are NOT selectable — use null for them.\n\n` +
     `Caption by @${post.ownerUsername}:\n"""${post.caption.slice(0, 3000)}"""${audio}`;
 
   const call = async (withImages: boolean) => {
@@ -151,6 +172,9 @@ export async function extract(post: RawPost, signals: ExtractSignals = {}): Prom
       if (post.displayUrl?.startsWith('https://')) {
         content.push({ type: 'image_url', image_url: { url: post.displayUrl, detail: 'low' } });
       }
+      for (const slide of slides) {
+        if (slide.startsWith('https://')) content.push({ type: 'image_url', image_url: { url: slide, detail: 'low' } });
+      }
       for (const frame of signals.frames ?? []) {
         content.push({ type: 'image_url', image_url: { url: frame, detail: 'low' } });
       }
@@ -158,10 +182,10 @@ export async function extract(post: RawPost, signals: ExtractSignals = {}): Prom
     content.push({ type: 'text', text: prompt });
     return openai().chat.completions.create({
       model: EXTRACT_MODEL,
-      max_tokens: 2000,
+      max_tokens: 6000, // roundups can carry 10+ events
       response_format: {
         type: 'json_schema',
-        json_schema: { name: 'event_extraction', strict: true, schema: EXTRACTION_SCHEMA },
+        json_schema: { name: 'event_extraction', strict: true, schema: MULTI_EXTRACTION_SCHEMA },
       },
       messages: [{ role: 'user', content }],
     });
@@ -171,7 +195,7 @@ export async function extract(post: RawPost, signals: ExtractSignals = {}): Prom
   try {
     res = await call(true);
   } catch (e) {
-    // IG CDN URLs are signed and expire; if OpenAI can't fetch the image
+    // IG CDN URLs are signed and expire; if OpenAI can't fetch an image
     // ("Error while downloading" / invalid_image_url), retry text-only rather
     // than losing the extraction.
     const msg = e instanceof Error ? e.message : String(e);
@@ -182,8 +206,9 @@ export async function extract(post: RawPost, signals: ExtractSignals = {}): Prom
     }
   }
   const text = res.choices[0]?.message?.content;
-  if (!text) return null;
-  return sanitizeExtraction(JSON.parse(text) as Extraction);
+  if (!text) return [];
+  const parsed = JSON.parse(text) as { events: Extraction[] };
+  return (parsed.events ?? []).slice(0, MAX_EVENTS_PER_POST).map(sanitizeExtraction);
 }
 
 /** Real-world model output quirks: literal "null"/"" strings instead of JSON

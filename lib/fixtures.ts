@@ -523,6 +523,51 @@ export function getFixturePosts(): RawPost[] {
         }),
       },
     },
+    // ── ROUNDUP CAROUSEL: one post → THREE events (multi-event splitting).
+    {
+      id: 'bucketlist-roundup',
+      shortCode: 'Rnd1',
+      url: 'https://www.instagram.com/p/Rnd1/',
+      caption:
+        'YOUR WEEKEND SORTED 🗽 swipe → 1) rooftop jazz at Elsewhere Fri 8pm $15 · 2) vinyl market at Essex Market Sat 12–6 free · 3) figure drawing at The Flower Shop Sun 10am $20',
+      displayUrl: '',
+      timestamp: ago(10),
+      ownerUsername: 'nybucketlist',
+      likesCount: 5200,
+      commentsCount: 210,
+      type: 'Sidecar',
+      slideUrls: ['https://fixture.local/slide1.jpg', 'https://fixture.local/slide2.jpg', 'https://fixture.local/slide3.jpg'],
+      _mock: {
+        isEvent: true,
+        extractions: [
+          extraction({
+            title: 'Rooftop Jazz Night',
+            venue: 'Elsewhere',
+            start: nextDay(5, 20),
+            desc: 'Rooftop jazz to open the weekend.',
+            cost: '$15',
+            category: 'music',
+          }),
+          extraction({
+            title: 'Weekend Vinyl Market',
+            venue: 'Essex Market',
+            start: nextDay(6, 12),
+            end: nextDay(6, 18),
+            desc: 'Crates on crates, all genres.',
+            cost: 'free',
+            category: 'market',
+          }),
+          extraction({
+            title: 'Sunday Figure Drawing',
+            venue: 'The Flower Shop',
+            start: nextDay(0, 10),
+            desc: 'All levels, materials included.',
+            cost: '$20',
+            category: 'art',
+          }),
+        ],
+      },
+    },
     // ── NON-EVENTS: the gate must drop both.
     {
       id: 'locals-meme',

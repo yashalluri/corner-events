@@ -22,6 +22,7 @@ interface PostAgg {
   posted_at: string;
   baseline: number | null;
   authority: number | null;
+  fanout: number; // how many events this post links to (roundups > 1)
 }
 
 /** The one engagement formula — tiers AND the UI's "top source post" ranking
@@ -47,7 +48,8 @@ export async function recomputeTiers(db: Db): Promise<void> {
   // 2. Pull per-event source posts with baselines + authority.
   const rows = await db.query<PostAgg>(`
     SELECT es.event_id, p.owner_username, p.likes, p.comments, p.posted_at::text AS posted_at,
-           s.baseline_engagement AS baseline, s.authority
+           s.baseline_engagement AS baseline, s.authority,
+           (SELECT count(*)::int FROM event_sources es2 WHERE es2.post_id = p.id) AS fanout
     FROM event_sources es
     JOIN posts p ON p.id = es.post_id
     LEFT JOIN sources s ON s.username = p.owner_username
@@ -78,7 +80,10 @@ export async function recomputeTiers(db: Db): Promise<void> {
     let topAuthority = 0;
     const accounts72h = new Set<string>();
     for (const p of posts) {
-      const e = engagement(p.likes, p.comments);
+      // A roundup's engagement is split across the N events it mentions —
+      // one viral "10 things this weekend" post must not make all 10 "popular".
+      const fanout = Math.max(1, p.fanout ?? 1);
+      const e = engagement(p.likes, p.comments) / fanout;
       const baseline = Math.max(1, p.baseline ?? 200); // unknown accounts get a conservative default
       const rate = e / baseline;
       const ageH = Math.max(0, (now - new Date(p.posted_at).getTime()) / 3600_000);

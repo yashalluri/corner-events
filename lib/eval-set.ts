@@ -11,7 +11,7 @@ export interface EvalCase {
   caption: string;
   transcript?: string; // reel audio snapshot (tests the video path)
   postedAt: string; // ISO — anchors relative-date resolution
-  expect: { isEvent: boolean; venueHint?: string; hasDate?: boolean };
+  expect: { isEvent: boolean; venueHint?: string; hasDate?: boolean; minEvents?: number };
 }
 
 // Anchor relative dates to a fixed Monday so the frozen set is reproducible.
@@ -82,6 +82,14 @@ export const EVAL_SET: EvalCase[] = [
     caption: 'Opening night: group show “Soft Machines” at 99 Canal. Tonight 6–9, natural wine while it lasts.',
     postedAt: T,
     expect: { isEvent: true, venueHint: '99 Canal', hasDate: true },
+  },
+  // ── multi-event roundup: one post → several events ──
+  {
+    id: 'roundup-weekend',
+    caption:
+      'YOUR WEEKEND SORTED 🗽 1) Friday: rooftop jazz at Elsewhere, 8pm, $15. 2) Saturday: vintage flea at Grand Bazaar NYC, 10am–5pm, free. 3) Sunday: dumpling crawl through Flushing, meets 1pm at Main St station, $40 with tastings.',
+    postedAt: T,
+    expect: { isEvent: true, hasDate: true, minEvents: 3 },
   },
   // ── NOT events ──
   {

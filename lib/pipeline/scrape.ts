@@ -34,6 +34,8 @@ interface ApifyItem {
   type?: string;
   videoUrl?: string;
   videoDuration?: number;
+  images?: string[];
+  childPosts?: { displayUrl?: string }[];
 }
 
 function normalize(item: ApifyItem): RawPost | null {
@@ -43,6 +45,15 @@ function normalize(item: ApifyItem): RawPost | null {
   const likes = item.likesCount != null && item.likesCount >= 0 ? item.likesCount : 0;
   const comments = item.commentsCount != null && item.commentsCount >= 0 ? item.commentsCount : 0;
   const ownerFromUrl = item.url.match(/instagram\.com\/([^/]+)\/(?:p|reel)\//)?.[1];
+  // Carousel slides beyond the cover: Apify exposes them as `images` and/or
+  // `childPosts[].displayUrl` depending on post shape. Slide 1 == displayUrl.
+  const slides = [
+    ...(item.images ?? []),
+    ...(item.childPosts ?? []).map((c) => c.displayUrl).filter((u): u is string => Boolean(u)),
+  ]
+    .filter((u) => u && u !== item.displayUrl)
+    .filter((u, i, arr) => arr.indexOf(u) === i)
+    .slice(0, 10);
   return {
     id: item.id ?? item.shortCode ?? item.url,
     shortCode: item.shortCode ?? '',
@@ -57,6 +68,7 @@ function normalize(item: ApifyItem): RawPost | null {
     type: (item.type as RawPost['type']) ?? 'Image',
     videoUrl: item.videoUrl,
     videoDuration: item.videoDuration,
+    slideUrls: slides.length ? slides : undefined,
   };
 }
 

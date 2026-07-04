@@ -55,6 +55,9 @@ export const PUBLISH_CONFIDENCE = 0.6;
 //    specific web search to corroborate + fill gaps (corroborate-only). ──
 export const MAX_ENRICH_PER_TICK = 25;
 
+// ── Multi-event posts: roundup carousels / "top N this weekend" reels ──
+export const MAX_EVENTS_PER_POST = 12;
+
 /** Canonical event-category vocabulary — single source of truth for the
  *  extraction schema, the normalizer, and the UI emoji map. */
 export const CATEGORIES = ['food', 'music', 'art', 'nightlife', 'market', 'fitness', 'comedy', 'other'] as const;

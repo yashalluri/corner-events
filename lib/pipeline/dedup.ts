@@ -53,6 +53,9 @@ export async function upsertEvent(
    *  signature, so it's a parameter — not synthesized here — to keep this
    *  module pure compare-and-write. */
   title: string,
+  /** Cover image for THIS event (multi-event posts map each event to its own
+   *  carousel slide). Defaults to the post's cover. */
+  coverUrl: string | null = post.displayUrl || null,
 ): Promise<UpsertResult> {
   const startAt = x.startDatetime.value;
 
@@ -116,7 +119,7 @@ export async function upsertEvent(
         x.ageLimit.value,
         x.capacity.value,
         x.externalLink.value,
-        post.displayUrl || null,
+        coverUrl,
         conf,
         isNewSource ? 0.1 : 0, // extra corroboration bump on the stored score
       ],
@@ -142,7 +145,7 @@ export async function upsertEvent(
       x.capacity.value,
       x.category.value ?? 'other',
       x.externalLink.value,
-      post.displayUrl || null,
+      coverUrl,
       overallConfidence(x),
     ],
   );

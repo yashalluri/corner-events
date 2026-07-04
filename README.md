@@ -35,37 +35,73 @@ ticks stay small because watermarks only admit new posts.
 ## Architecture
 
 ```
-     SEED ACCOUNTS (7 NYC curators) + GOLDEN POST URLS
+   7 CURATED NYC ACCOUNTS (locked list) + 2 GOLDEN POST URLS
         │
-        ▼  every 3h (Vercel Cron → /api/cron/ingest) — or npm run ingest
-┌──────────────────────────────────────────────────────────────┐
-│  A  SCRAPE      Apify instagram-scraper (fixture fallback)    │
-│     ↓           watermark filter: only posts newer than the   │
-│                 last processed timestamp per account          │
-│  B  GATE        gpt-4o-mini — "is this even an event?"        │
-│                 drops memes/listicles BEFORE paying for vision│
-│  C  EXTRACT     gpt-4o — caption+flyer → fields, per-field    │
-│                 confidence + evidence, null-beats-a-guess.    │
-│                 REELS: + gpt-4o-transcribe audio + ffmpeg     │
-│                 frames → spoken/on-screen details are read    │
-│  D  RESOLVE     deterministic date + field validators, then   │
-│                 Google Places → lat/lng + neighborhood.       │
-│                 hold-don't-drop: unresolved venue = kept,     │
-│                 off-map (needs_review)                        │
-│  E  IDENTITY    atomic upsert: surrogate event_id (UUID) +    │
-│                 dedup signature (venue × local-day × title    │
-│                 similarity). Re-posts ATTACH + enrich; they   │
-│                 never duplicate.                              │
-│  F  TIERS       lowkey / popular / trending — recomputed      │
-│                 every tick (engagement rate normalized by     │
-│                 account baseline, 72h decay, multi-account    │
-│                 velocity)                                     │
-└──────────────────────────────────────────────────────────────┘
+        ▼  autonomous: Vercel Cron (daily) / GitHub Action (6h) / manual ↻ in-app
+┌────────────────────────────────────────────────────────────────────────┐
+│ A  SCRAPE        Apify instagram-scraper · onlyPostsNewerThan 3mo      │
+│                  watermark filter (only new posts per account)          │
+│                  scrape failure ≠ run failure: stored unprocessed       │
+│                  posts RE-ENTER from the DB (re-extract w/o re-scrape)  │
+│                                                                        │
+│ A2 SIGNALS       per post type, gathered BEFORE the LLM sees it:       │
+│     image   →    cover image                                           │
+│     carousel→    cover + every slide (roundups: 1 event per slide)     │
+│     reel    →    cover + gpt-4o-transcribe AUDIO (cached on the row)   │
+│                  + ffmpeg interior FRAMES (local; cron degrades)       │
+│                                                                        │
+│ B  GATE          gpt-4o-mini — "is this an event?" (sees transcript    │
+│                  too, so emoji-caption reels survive; dated roundups   │
+│                  pass, place-listicles don't)                          │
+│                                                                        │
+│ C  EXTRACT       gpt-4o, ONE call, ALL signals → 1..N EVENTS per post  │
+│                  (roundup carousels/reels split; cap 12). Per field:   │
+│                  {value, confidence, evidence}; null-beats-a-guess;    │
+│                  per-event coverSlideIndex picks its own slide cover   │
+│                                                                        │
+│ D  VALIDATE +    deterministic: date sanity (now→12mo, tz-resolved     │
+│    RESOLVE       vs post timestamp) · implausible venue/price/age/     │
+│                  capacity nulled · Google Places ladder                │
+│                  (name+addr → name → BARE ADDRESS) → place_id,         │
+│                  lat/lng, neighborhood, venue PHOTO (cover fallback)   │
+│                                                                        │
+│ E  IDENTITY      atomic upsert: PK = surrogate UUID; identity =        │
+│                  signature (venue place_id × local-day × title-sim).   │
+│                  Re-posts & roundup mentions ATTACH as sources         │
+│                  (+confidence) — never duplicate                       │
+│                                                                        │
+│ F  ENRICH agent  the one true agent: unverified/venue-less upcoming    │
+│                  events → SPECIFIC web search (Responses web_search)   │
+│                  → corroborate-only verdict. Fill nulls only; promote  │
+│                  to verified ONLY on independent same-day source; web  │
+│                  can supply the missing venue → Places → pinned        │
+│                                                                        │
+│ G  TIERS         lowkey / popular / trending — engagement normalized   │
+│                  by account baseline, 72h decay, multi-account         │
+│                  velocity, ÷fanout so viral roundups don't inflate     │
+└────────────────────────────────────────────────────────────────────────┘
         │
         ▼
-   Supabase Postgres / embedded PGlite   →   /api/events   →   Corner-clone UI
-   lifecycle computed at query time: past events simply stop being served
+  Supabase Postgres (embedded PGlite fallback for keyless demo)
+  sources · posts (raw + transcripts + slides) · venues (+photos) ·
+  events · event_sources (M:N — the attach/corroboration backbone)
+        │
+        ▼
+  /api/events  — lifecycle at query time (upcoming/live shown, past
+  auto-hidden, no-venue/no-date HELD off-map; low-confidence SHOWN
+  with an "unverified" badge) · IG covers via same-origin /api/img proxy
+        │
+        ▼
+  Corner-clone UI — MapLibre map, tier + category filter chips,
+  neighborhood-grouped "events nearby" sheet, tap-through to the
+  source Instagram post, Directions, "confirmed on the web" link
 ```
+
+**Where the intelligence lives (and where it deliberately doesn't):** two LLM
+judgment points (gate, extract) + one bounded agent (web corroboration);
+everything else — dedup, tiers, lifecycle, validators — is deterministic code.
+Yash's original Agent 1/2/3 sketch maps to: Agent 1 → stages A–D; Agents 2+3 →
+merged into stage E's atomic upsert (they raced as separate agents).
 
 ### Design decisions worth knowing
 
@@ -132,6 +168,39 @@ fixture mode they carry placeholder captions under their **real URLs**; with an
 6. **Lowkey is a positive signal:** small-account events tier as lowkey only when they
    punch above the account's own baseline or come from a trusted curator — a flop can't
    masquerade as a hidden gem.
+
+## Current state (live data, as of 2026-07-03)
+
+| Metric | Value |
+|---|---|
+| Posts ingested (3-month window, 6 accounts + collabs) | 204 (all processed) |
+| — of which reels (transcribed + framed) | 62 |
+| — of which split into multiple events | 19 posts |
+| Events extracted | **161** |
+| Upcoming/live on the map | **55** (6 badged unverified, 2 web-confirmed) |
+| Golden acceptance posts | both ingested & pinned (Nudibranch pop-up; Zwirner archive sale) |
+
+**Measured accuracy** (`npm run eval`, frozen labeled set, live models):
+event-gate **F1 100%** · date extraction **100%** · venue match **89%** ·
+multi-event split **100%**. Trust stance: we don't claim 100% extraction —
+we publish only what's trustworthy (deterministic holds + unverified badge +
+web corroboration) and measure the rest.
+
+### Operations notes
+- **@thirstygallerina** is 21+ age-gated by Instagram — unscrapeable without a
+  logged-in session (API returns `"You must be 21 years old or over"`). Her
+  website (thirstygallerina.com) is the roadmap source. **@wtfdwg**'s real
+  handle is `wherethefuckdowego` (fixed in config).
+- **Apify free credit is exhausted** (deep backfills). The app + dataset work
+  fully; the cron discovers *new* posts again once credit is added
+  (console.apify.com/billing). A funding lapse is graceful: the run logs the
+  402 and continues with stored posts.
+- Known limitation: adjacent-place duplicates ("Brooklyn Bridge" vs "Brooklyn
+  Bridge Pedestrian Walkway") don't merge — dedup is venue-id-keyed; proximity
+  merge is the fix if it matters.
+- Re-extraction migrations: wipe `events`+`event_sources` only (keep `posts` —
+  cached transcripts/slides — and `venues` — photos), reset
+  `posts.processed=false` AND `sources.last_post_ts=NULL`, run `npm run ingest`.
 
 ## Deploy (hosted submission)
 

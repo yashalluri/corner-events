@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS posts (               -- raw scrape payloads (re-extr
 -- Older DBs created before reels support: add columns if missing.
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS video_url TEXT;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS transcript TEXT;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS slide_urls TEXT;  -- JSON array (carousels)
 -- Web-enrichment bookkeeping (corroboration agent).
 ALTER TABLE events ADD COLUMN IF NOT EXISTS enriched_at TIMESTAMPTZ;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS corroboration_url TEXT;

@@ -293,50 +293,53 @@
     <span class="eyebrow">System design</span>
     <h2><span class="n">04</span> Architecture</h2>
     <p class="lede">Your Agent 1 / 2 / 3 is the right decomposition. I keep it — and expand Agent 1 into named
-      stages, because that's where data quality is won or lost. <span style="color:var(--blue)">Blue = stages you don't have yet.</span></p>
+      stages, because that's where data quality is won or lost. <span style="color:var(--blue)">Blue = as-built additions beyond the original sketch.</span>
+      This diagram reflects the SHIPPED system (v1, live data).</p>
   </div>
 
   <div class="diagram">
     <div class="flow">
-      <div class="node src"><div class="t">Sources</div><div class="d">IG accounts · hashtags · location tags → Orchestrator / Scheduler</div></div>
+      <div class="node src"><div class="t">Sources</div><div class="d">7 curated NYC accounts (locked) + golden posts → autonomous cron / manual ↻</div></div>
       <div class="arrow"></div>
 
       <div class="group">
-        <span class="glabel">Agent 1 — ingest &amp; structure</span>
-        <div class="node"><span class="stage">A</span><div class="t">Scrape · Apify</div><div class="d">posts · reels · stories</div></div>
+        <span class="glabel">Ingest &amp; structure (was Agent 1)</span>
+        <div class="node"><span class="stage">A</span><div class="t">Scrape · Apify</div><div class="d">posts · reels · carousels, 3-month window, per-account watermarks. Scrape failure ≠ run failure: stored posts re-enter from the DB</div></div>
         <div class="arrow"></div>
-        <div class="node newstage"><span class="stage">B</span><div class="t">Event-gate <span class="newpill">NEW</span></div><div class="d">“is this even an event?” → drop memes &amp; café recs before paying for vision</div></div>
+        <div class="node newstage"><span class="stage">A2</span><div class="t">Signals <span class="newpill">NEW</span></div><div class="d">reels → gpt-4o-transcribe audio (cached) + ffmpeg frames · carousels → every slide · posts → cover</div></div>
         <div class="arrow"></div>
-        <div class="node"><span class="stage">C</span><div class="t">Extract · LLM</div><div class="d">vision + caption → fields, per-field confidence + evidence span</div></div>
+        <div class="node newstage"><span class="stage">B</span><div class="t">Event-gate <span class="newpill">NEW</span></div><div class="d">gpt-4o-mini, sees the transcript too — emoji-caption reels survive; dated roundups pass, place-listicles don't</div></div>
         <div class="arrow"></div>
-        <div class="node newstage"><span class="stage">D</span><div class="t">Resolve <span class="newpill">NEW</span></div><div class="d">relative-date normalization + Google Places venue match → lat/lng</div></div>
+        <div class="node newstage"><span class="stage">C</span><div class="t">Extract · gpt-4o <span class="newpill">MULTI</span></div><div class="d">one call, all signals → <b>1..N events per post</b> (roundups split, cap 12) · per-field confidence + evidence · null-beats-a-guess · per-event slide cover</div></div>
+        <div class="arrow"></div>
+        <div class="node newstage"><span class="stage">D</span><div class="t">Validate + Resolve <span class="newpill">NEW</span></div><div class="d">date sanity (tz vs post time) · implausible venue/price/age nulled · Places ladder: name+addr → name → bare address → place_id, lat/lng, neighborhood, venue photo</div></div>
       </div>
 
-      <div class="arrow lbl" data-l="structured JSON"></div>
+      <div class="arrow lbl" data-l="1..N structured events"></div>
 
       <div class="group">
-        <span class="glabel">Agent 2 — identity (new events)</span>
-        <div class="node"><span class="stage">E</span><div class="t">Dedup signature</div><div class="d">match against existing events</div></div>
-        <div class="arrow lbl" data-l="new / duplicate"></div>
+        <span class="glabel">Identity — atomic upsert (Agents 2+3 merged: they raced as separate agents)</span>
+        <div class="node"><span class="stage">E</span><div class="t">Dedup signature</div><div class="d">venue place_id × local-day × title similarity · PK = surrogate UUID</div></div>
+        <div class="arrow lbl" data-l="new / match"></div>
         <div class="branch">
-          <div class="node"><div class="t">New →</div><div class="d">mint event_id, ingest</div></div>
-          <div class="node"><div class="t">Duplicate →</div><div class="d">attach source, hand to Agent 3</div></div>
+          <div class="node"><div class="t">New →</div><div class="d">mint event_id, insert</div></div>
+          <div class="node"><div class="t">Match →</div><div class="d">ATTACH source + fill nulls + confidence bump (corroboration)</div></div>
         </div>
       </div>
 
       <div class="arrow"></div>
 
       <div class="group">
-        <span class="glabel">Agent 3 — updates</span>
-        <div class="node"><span class="stage">F</span><div class="t">Merge / enrich</div><div class="d">fold overlapping info into the existing event</div></div>
+        <span class="glabel">Web-corroboration agent (the one true agent) — NEW</span>
+        <div class="node newstage"><span class="stage">F</span><div class="t">Enrich · web_search</div><div class="d">unverified/venue-less upcoming events → specific search → corroborate-only: fill nulls, promote to verified ONLY on independent same-day source; web can supply the missing venue → Places → pinned</div></div>
       </div>
 
       <div class="arrow"></div>
-      <div class="node store"><div class="t">Store</div><div class="d">venues · events · sources · event_sources &nbsp;·&nbsp; low-confidence → review queue</div></div>
+      <div class="node store"><div class="t">Store · Supabase</div><div class="d">sources · posts (raw + transcripts + slides) · venues (+photos) · events · event_sources · no-venue/no-date HELD; low-confidence SHOWN with “unverified” badge</div></div>
       <div class="arrow lbl" data-l="rank / curate"></div>
-      <div class="node"><div class="t">“Best” ranking</div><div class="d">authority · scarcity · engagement · proximity · confidence → tier: lowkey · popular · trending</div></div>
+      <div class="node"><div class="t">Tiers</div><div class="d">lowkey · popular · trending — baseline-normalized engagement, 72h decay, multi-account velocity, ÷fanout (viral roundups don't inflate)</div></div>
       <div class="arrow"></div>
-      <div class="node map"><div class="t">Corner map</div><div class="d">events pinned, with source attribution</div></div>
+      <div class="node map"><div class="t">Corner map</div><div class="d">55 live events · neighborhood-grouped sheet · tap-through to IG · Directions · “confirmed on the web”</div></div>
     </div>
 
     <div class="legend">
