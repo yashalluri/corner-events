@@ -42,8 +42,10 @@ interface EventQueryRow {
   start_at: string | null; end_at: string | null; cost: string | null; age_limit: string | null;
   capacity: number | null; category: string; external_link: string | null; cover_url: string | null;
   confidence: number; tier: string | null; tier_reason: string | null;
-  popular_score: number; heat_score: number; created_at: string; updated_at: string;
+  popular_score: number; heat_score: number; corroboration_url: string | null;
+  created_at: string; updated_at: string;
   v_name: string | null; v_address: string | null; v_lat: number | null; v_lng: number | null; v_hood: string | null;
+  v_photo: string | null;
 }
 
 export async function listEvents(opts?: { includePast?: boolean }): Promise<EventWithVenue[]> {
@@ -55,7 +57,8 @@ export async function listEvents(opts?: { includePast?: boolean }): Promise<Even
     db.query<EventQueryRow>(`
       SELECT e.*, e.start_at::text AS start_at, e.end_at::text AS end_at,
              e.created_at::text AS created_at, e.updated_at::text AS updated_at,
-             v.name AS v_name, v.address AS v_address, v.lat AS v_lat, v.lng AS v_lng, v.neighborhood AS v_hood
+             v.name AS v_name, v.address AS v_address, v.lat AS v_lat, v.lng AS v_lng, v.neighborhood AS v_hood,
+             v.photo_url AS v_photo
       FROM events e LEFT JOIN venues v ON v.id = e.venue_id
       ORDER BY e.start_at ASC NULLS LAST
     `),
@@ -77,15 +80,17 @@ export async function listEvents(opts?: { includePast?: boolean }): Promise<Even
     id: r.id, title: r.title, description: r.description, venue_id: r.venue_id,
     start_at: r.start_at, end_at: r.end_at, cost: r.cost, age_limit: r.age_limit,
     capacity: r.capacity, category: r.category, external_link: r.external_link,
-    // Presentation-ready cover: IG CDN URLs must go through our same-origin
-    // proxy (browser CORP blocking) — decided here once, not in components.
+    // Presentation-ready cover chain: IG image (proxied — browser CORP
+    // blocking) → the venue's own Places photo → null (gradient in the UI).
+    // An address-only reel with no usable IG image shows the actual place.
     cover_url:
       r.cover_url && isIgCdnUrl(r.cover_url)
         ? `/api/img?src=${encodeURIComponent(r.cover_url)}`
-        : r.cover_url,
+        : r.cover_url ?? r.v_photo,
     confidence: r.confidence,
     tier: (r.tier as EventWithVenue['tier']) ?? null, tier_reason: r.tier_reason,
     popular_score: r.popular_score, heat_score: r.heat_score,
+    corroboration_url: r.corroboration_url,
     created_at: r.created_at, updated_at: r.updated_at,
     status: statusOf(r.start_at, r.end_at, r.venue_id),
     unverified: r.confidence < PUBLISH_CONFIDENCE, // shows on map, but badged

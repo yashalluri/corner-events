@@ -70,19 +70,36 @@ interface PlacesResult {
   displayName?: { text?: string };
   formattedAddress?: string;
   location?: { latitude: number; longitude: number };
+  photos?: { name: string }[];
 }
 
-async function resolveLive(name: string, address: string | null): Promise<Venue | null> {
+/** Resolve a Places photo reference to a public, keyless googleusercontent URI
+ *  (used as the event cover when the IG post has no usable image). */
+async function photoUri(photoName: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=800&skipHttpRedirect=true`,
+      { headers: { 'X-Goog-Api-Key': env.places()! } },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { photoUri?: string };
+    return data.photoUri ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function searchPlaces(textQuery: string): Promise<Venue | null> {
   const key = env.places();
   const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'X-Goog-Api-Key': key!,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location',
+      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos',
     },
     body: JSON.stringify({
-      textQuery: address ? `${name}, ${address}` : `${name}, New York`,
+      textQuery,
       locationBias: {
         rectangle: {
           low: { latitude: CITY.bounds.south, longitude: CITY.bounds.west },
@@ -103,13 +120,14 @@ async function resolveLive(name: string, address: string | null): Promise<Venue 
   }
   return {
     id: p.id,
-    name: p.displayName?.text ?? name,
+    name: p.displayName?.text ?? textQuery,
     address: p.formattedAddress ?? null,
     lat,
     lng,
     // Derive once at write time (Places doesn't return neighborhoods) so the
     // read path never recomputes it per request.
     neighborhood: neighborhoodFor(lat, lng),
+    photoUrl: p.photos?.[0]?.name ? await photoUri(p.photos[0].name) : null,
   };
 }
 
@@ -118,15 +136,27 @@ export function placesMode(): 'live' | 'fixture' {
 }
 
 export async function resolveVenue(x: Extraction): Promise<Venue | null> {
-  const name = x.venueName.value;
-  if (!name || x.venueName.confidence < 0.5) return null;
+  const name = x.venueName.value && x.venueName.confidence >= 0.5 ? x.venueName.value : null;
+  const address = x.address.value;
+  if (!name && !address) return null;
+
   if (env.places()) {
-    try {
-      const live = await resolveLive(name, x.address.value);
-      if (live) return live;
-    } catch {
-      // fall through to fixture directory
+    // Best-signal-first query ladder. The address-only rung is the edge case
+    // where a reel names no venue at all ("125 1st Ave, Friday") — Places
+    // turns the bare address into a real named place we can pin.
+    const queries = [
+      name && address ? `${name}, ${address}` : null,
+      name ? `${name}, New York` : null,
+      address ? `${address}, New York` : null,
+    ].filter((q): q is string => q !== null);
+    for (const q of queries) {
+      try {
+        const live = await searchPlaces(q);
+        if (live) return live;
+      } catch {
+        // try the next rung, then the fixture directory
+      }
     }
   }
-  return resolveFixture(name);
+  return name ? resolveFixture(name) : null;
 }

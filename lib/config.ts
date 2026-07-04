@@ -51,6 +51,10 @@ export const MAX_VIDEO_BYTES = 24 * 1024 * 1024; // skip transcription above Whi
 //    below it, it still SHOWS on the map but wears an "unverified" badge. ──
 export const PUBLISH_CONFIDENCE = 0.6;
 
+// ── Web-enrichment agent: unverified upcoming events per tick that get a
+//    specific web search to corroborate + fill gaps (corroborate-only). ──
+export const MAX_ENRICH_PER_TICK = 25;
+
 /** Canonical event-category vocabulary — single source of truth for the
  *  extraction schema, the normalizer, and the UI emoji map. */
 export const CATEGORIES = ['food', 'music', 'art', 'nightlife', 'market', 'fitness', 'comedy', 'other'] as const;

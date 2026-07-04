@@ -17,12 +17,13 @@ import { upsertEvent } from './dedup';
 import { recomputeTiers } from './tiers';
 import { transcribeVideo } from './transcribe';
 import { sampleFrames } from './frames';
+import { enrichUnverified } from './enrich';
 
 export async function runPipeline(): Promise<PipelineStats> {
   const db = await getDb();
   const stats: PipelineStats = {
     scraped: 0, gated_out: 0, extracted: 0, venue_unresolved: 0,
-    inserted: 0, merged: 0, skipped_duplicates: 0, errors: [],
+    inserted: 0, merged: 0, skipped_duplicates: 0, enriched: 0, promoted: 0, errors: [],
     mode: { scrape: 'fixture', llm: llmMode(), places: placesMode() },
   };
 
@@ -138,7 +139,15 @@ export async function runPipeline(): Promise<PipelineStats> {
     }
   }
 
-  // 5. Tiers recompute over the whole set (decay means these shift every tick).
+  // 5. Web-corroboration agent: try to verify + fill the unverified bucket
+  //    (specific searches, corroborate-only, capped, idempotent via enriched_at).
+  const enrichResult = await enrichUnverified(db, (id, msg) =>
+    console.log(`  [enrich              ] ${id.slice(0, 24).padEnd(24)} ${msg}`),
+  );
+  stats.enriched = enrichResult.enriched;
+  stats.promoted = enrichResult.promoted;
+
+  // 6. Tiers recompute over the whole set (decay means these shift every tick).
   await recomputeTiers(db);
 
   // 6. Advance watermarks to the newest processed post per account.

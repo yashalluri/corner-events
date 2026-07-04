@@ -175,7 +175,7 @@ export default function CornerApp() {
                   {selected.cost ? ` · ${formatCost(selected.cost)}` : ''}
                   {selected.age_limit ? ` · ${selected.age_limit}` : ''}
                 </div>
-                {selected.unverified && (
+                {selected.unverified && !selected.corroboration_url && (
                   <div className="detail-unverified">⚠ unverified — auto-detected, details may be off</div>
                 )}
                 {selected.tier && selected.tier_reason && (
@@ -183,7 +183,36 @@ export default function CornerApp() {
                     {TIER_EMOJI[selected.tier]} {selected.tier_reason}
                   </div>
                 )}
-                <div className="detail-ig">Instagram ↗</div>
+                <div className="detail-actions">
+                  <span className="detail-ig">Instagram ↗</span>
+                  {selected.venue && !selected.venue.id.startsWith('fixture:') && (
+                    <button
+                      className="detail-linkbtn"
+                      onClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        window.open(
+                          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selected.venue!.name)}&query_place_id=${selected.venue!.id}`,
+                          '_blank',
+                        );
+                      }}
+                    >
+                      Directions ↗
+                    </button>
+                  )}
+                  {selected.corroboration_url && (
+                    <button
+                      className="detail-linkbtn confirmed"
+                      onClick={(ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        window.open(selected.corroboration_url!, '_blank');
+                      }}
+                    >
+                      ✓ confirmed on the web
+                    </button>
+                  )}
+                </div>
               </div>
             </a>
           </div>

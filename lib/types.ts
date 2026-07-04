@@ -52,6 +52,7 @@ export interface Venue {
   lat: number;
   lng: number;
   neighborhood: string | null;
+  photoUrl?: string | null; // Google Places photo — event-cover fallback
 }
 
 export type EventTier = 'lowkey' | 'popular' | 'trending' | null;
@@ -75,6 +76,7 @@ export interface EventRow {
   tier_reason: string | null;
   popular_score: number;
   heat_score: number;
+  corroboration_url: string | null; // web-enrichment: independent source that confirmed this event
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +96,8 @@ export interface PipelineStats {
   inserted: number;
   merged: number;
   skipped_duplicates: number;
+  enriched: number; // unverified events run through the web-corroboration agent
+  promoted: number; // of those, confirmed by the web → verified
   errors: string[];
   mode: { scrape: 'live' | 'fixture'; llm: 'live' | 'fixture'; places: 'live' | 'fixture' };
 }

@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS posts (               -- raw scrape payloads (re-extr
 -- Older DBs created before reels support: add columns if missing.
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS video_url TEXT;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS transcript TEXT;
+-- Web-enrichment bookkeeping (corroboration agent).
+ALTER TABLE events ADD COLUMN IF NOT EXISTS enriched_at TIMESTAMPTZ;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS corroboration_url TEXT;
 
 CREATE TABLE IF NOT EXISTS venues (
   id TEXT PRIMARY KEY,                -- google place_id (or fixture:slug)
@@ -44,8 +47,10 @@ CREATE TABLE IF NOT EXISTS venues (
   address TEXT,
   lat DOUBLE PRECISION NOT NULL,
   lng DOUBLE PRECISION NOT NULL,
-  neighborhood TEXT
+  neighborhood TEXT,
+  photo_url TEXT                      -- Places photo → event-cover fallback
 );
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS photo_url TEXT;
 
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY,                -- surrogate key (answer to Jake's question)

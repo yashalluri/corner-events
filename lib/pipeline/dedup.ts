@@ -56,12 +56,13 @@ export async function upsertEvent(
 ): Promise<UpsertResult> {
   const startAt = x.startDatetime.value;
 
-  // 1. Ensure venue row exists.
+  // 1. Ensure venue row exists (photo backfills onto older rows too).
   if (venue) {
     await db.query(
-      `INSERT INTO venues (id, name, address, lat, lng, neighborhood)
-       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (id) DO NOTHING`,
-      [venue.id, venue.name, venue.address, venue.lat, venue.lng, venue.neighborhood],
+      `INSERT INTO venues (id, name, address, lat, lng, neighborhood, photo_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (id) DO UPDATE SET photo_url = COALESCE(venues.photo_url, EXCLUDED.photo_url)`,
+      [venue.id, venue.name, venue.address, venue.lat, venue.lng, venue.neighborhood, venue.photoUrl ?? null],
     );
   }
 

@@ -90,6 +90,19 @@ ticks stay small because watermarks only admit new posts.
   audio + ffmpeg-sampled frames, all fed to one extraction call. The gate also sees the
   transcript, so an emoji-caption reel isn't wrongly dropped. Frames are local-only
   (`brew install ffmpeg`); the serverless cron degrades to caption+cover+audio.
+- **Address-only reels still pin:** venue resolution ladders name+address → name →
+  **bare address**, so "125 1st Ave, Friday" becomes a real named place. Each venue
+  also captures a **Google Places photo** used as the event cover when the IG post
+  has no usable image, and the detail card links **Directions** to Google Maps.
+- **A web-corroboration agent closes the loop on unverified events:** the one true
+  *agent* in the system. Low-confidence/venue-less upcoming events get a **specific**
+  web search (OpenAI Responses `web_search`); results are used corroborate-only —
+  fill only null fields, never overwrite IG data, and **promote to verified only when
+  an independent source confirms the same event in the same local-day window** (the
+  web can even supply the missing venue, which Places then resolves to a pin).
+  Capped per tick, idempotent via `enriched_at`, runs autonomously in the cron.
+  Verified live: a venue-less "Macy's 4th of July Fireworks" was found on the web,
+  date-matched, venue-attached (Brooklyn Bridge Pedestrian Walkway), and promoted.
 - **Trust > extraction rate:** we don't claim 100% extraction — we publish only what's
   trustworthy. A **publish-gate** holds any event below `PUBLISH_CONFIDENCE` (or with no
   resolved venue/date) off the map; **deterministic validators** null out implausible
